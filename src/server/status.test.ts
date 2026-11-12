@@ -24,9 +24,9 @@ function setEnv(overrides: Record<string, string | undefined> = {}) {
     LEDGER_DB_USER: "ledger_app",
     LEDGER_DB_PASSWORD: "app-secret",
     DATABASE_URL: "postgresql://ledger_app:app-secret@127.0.0.1:5432/ledger",
-    ...Object.fromEntries(
+    ...(Object.fromEntries(
       Object.entries(overrides).filter(([, v]) => v !== undefined),
-    ) as Record<string, string>,
+    ) as Record<string, string>),
   };
   for (const key of Object.keys(values)) {
     const override = overrides[key];
@@ -46,7 +46,10 @@ describe("checkDatabaseStatus", () => {
     const result = await checkDatabaseStatus();
     expect(result.outcome).toBe("CONFIG_INVALID");
     expect(mockedProbe).not.toHaveBeenCalled();
-    expect(mockedLog).toHaveBeenCalledWith("CONFIG_INVALID", expect.any(Number));
+    expect(mockedLog).toHaveBeenCalledWith(
+      "CONFIG_INVALID",
+      expect.any(Number),
+    );
   });
 
   it("returns the probe outcome and a UTC timestamp when settings are valid", async () => {

@@ -2,38 +2,28 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { ProbeOutcome } from "@/server/diagnostics";
 
-vi.mock("server-only", () => ({}));
+const checkDatabaseStatus = vi.fn();
 vi.mock("@/server/status", () => ({
-  checkDatabaseStatus: vi.fn(),
+  checkDatabaseStatus: () => checkDatabaseStatus(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
-import { checkDatabaseStatus } from "@/server/status";
 import Home from "./page";
 
-const mockedStatus = vi.mocked(checkDatabaseStatus);
+const CHECKED_AT = "2026-11-08T12:00:00.000Z";
 
-function statusOf(outcome: ProbeOutcome) {
-  mockedStatus.mockResolvedValue({
-    outcome,
-    durationMs: 12,
-    checkedAt: "2026-11-08T12:34:56.000Z",
-  });
+function statusOf(outcome: string) {
+  checkDatabaseStatus.mockResolvedValue({ outcome, checkedAt: CHECKED_AT });
 }
 
-async function renderHome() {
-  render(await Home());
-}
-
-describe("Home status page", () => {
-  it("renders the scaffold heading, explanation, and labelled timestamp", async () => {
+describe("Home", () => {
+  // spec 0001 scaffold surface: literal copy and landmark structure
+  it("renders the scaffold copy, status section, and timestamp", async () => {
     statusOf("DB_OK");
-    await renderHome();
-
+    render(await Home());
     expect(
       screen.getByRole("heading", { name: "Ledger", level: 1 }),
     ).toBeInTheDocument();
@@ -42,16 +32,17 @@ describe("Home status page", () => {
         "Local scaffold. This page checks the connection to your local database.",
       ),
     ).toBeInTheDocument();
-
-    const time = screen.getByText("2026-11-08T12:34:56.000Z");
-    expect(time).toHaveAttribute("dateTime", "2026-11-08T12:34:56.000Z");
-    expect(screen.getByText(/Last checked \(UTC\):/)).toBeInTheDocument();
-
+    expect(
+      screen.getByRole("heading", { name: "Database status", level: 2 }),
+    ).toBeInTheDocument();
+    const time = screen.getByText(CHECKED_AT);
+    expect(time).toHaveAttribute("datetime", CHECKED_AT);
     expect(
       screen.getByRole("button", { name: "Check again" }),
     ).toBeInTheDocument();
   });
 
+  // spec 0001 outcome table: each code maps to one fixed state and message
   it.each([
     ["DB_OK", "Available", "The local database is available."],
     [
@@ -80,29 +71,37 @@ describe("Home status page", () => {
       "Unavailable",
       "The database check could not complete.",
     ],
-  ] as const)(
-    "maps %s to label %s and its fixed message",
+  ])(
+    "shows state %s and the fixed message for %s",
     async (outcome, label, message) => {
       statusOf(outcome);
-      await renderHome();
+      render(await Home());
       expect(screen.getByText(`Status: ${label}`)).toBeInTheDocument();
       expect(screen.getByText(message)).toBeInTheDocument();
     },
   );
 
-  it("shows the README setup direction only when the database is not available", async () => {
-    statusOf("DB_CONNECTION_FAILED");
-    await renderHome();
-    expect(
-      screen.getByText("See local setup and troubleshooting in README.md."),
-    ).toBeInTheDocument();
+  const DIRECTION = "See local setup and troubleshooting in README.md.";
+
+  // spec 0001: setup direction is part of the action only for settings and
+  // connection or auth failures, not for a healthy check or the timeouts
+  it.each([
+    "CONFIG_INVALID",
+    "DB_CONNECTION_FAILED",
+    "DB_AUTH_FAILED",
+    "DB_QUERY_FAILED",
+  ])("shows the setup direction for %s", async (outcome) => {
+    statusOf(outcome);
+    render(await Home());
+    expect(screen.getByText(DIRECTION)).toBeInTheDocument();
   });
 
-  it("omits the setup direction when the database is available", async () => {
-    statusOf("DB_OK");
-    await renderHome();
-    expect(
-      screen.queryByText("See local setup and troubleshooting in README.md."),
-    ).not.toBeInTheDocument();
-  });
+  it.each(["DB_OK", "DB_ACQUIRE_TIMEOUT", "DB_QUERY_TIMEOUT"])(
+    "hides the setup direction for %s",
+    async (outcome) => {
+      statusOf(outcome);
+      render(await Home());
+      expect(screen.queryByText(DIRECTION)).not.toBeInTheDocument();
+    },
+  );
 });

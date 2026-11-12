@@ -25,8 +25,7 @@ const STATE_MESSAGE: Record<ProbeOutcome, string> = {
   DB_QUERY_FAILED: "The database check could not complete.",
 };
 
-const SETUP_DIRECTION =
-  "See local setup and troubleshooting in README.md.";
+const SETUP_DIRECTION = "See local setup and troubleshooting in README.md.";
 
 export default async function Home() {
   const status = await checkDatabaseStatus();
@@ -41,8 +40,14 @@ export default async function Home() {
         </p>
       </header>
 
-      <section aria-labelledby="db-status-heading" className="rounded border border-zinc-300 p-4">
-        <h2 id="db-status-heading" className="text-lg font-medium text-zinc-900">
+      <section
+        aria-labelledby="db-status-heading"
+        className="rounded border border-zinc-300 p-4"
+      >
+        <h2
+          id="db-status-heading"
+          className="text-lg font-medium text-zinc-900"
+        >
           Database status
         </h2>
         <p className="mt-2 font-medium text-zinc-900">
@@ -55,9 +60,11 @@ export default async function Home() {
         </p>
       </section>
 
-      {status.outcome !== "DB_OK" && (
-        <p className="text-sm text-zinc-700">{SETUP_DIRECTION}</p>
-      )}
+      {status.outcome !== "DB_OK" &&
+        status.outcome !== "DB_ACQUIRE_TIMEOUT" &&
+        status.outcome !== "DB_QUERY_TIMEOUT" && (
+          <p className="text-sm text-zinc-700">{SETUP_DIRECTION}</p>
+        )}
 
       <RetryButton />
     </main>

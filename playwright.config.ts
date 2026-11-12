@@ -6,9 +6,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:3000",
   },
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-  ],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: "pnpm build && pnpm start",
     url: "http://127.0.0.1:3000",

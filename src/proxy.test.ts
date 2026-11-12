@@ -46,6 +46,8 @@ describe("proxy", () => {
   ])("rejects %s with 403", async (_label, origin) => {
     const response = proxy(request({ origin }));
     expect(response.status).toBe(403);
-    expect(await response.text()).toBe("Cross-origin requests are not allowed.");
+    expect(await response.text()).toBe(
+      "Cross-origin requests are not allowed.",
+    );
   });
 });

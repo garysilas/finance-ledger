@@ -19,7 +19,8 @@ function deps(overrides: {
 }) {
   return {
     connect: overrides.connect ?? (() => Promise.resolve(fakeClient())),
-    runCheck: overrides.runCheck ?? (() => Promise.resolve([{ "?column?": 1 }])),
+    runCheck:
+      overrides.runCheck ?? (() => Promise.resolve([{ "?column?": 1 }])),
     now: overrides.now ?? (() => 0),
   };
 }
@@ -56,6 +57,16 @@ describe("probeDatabase", () => {
       deps({ connect: () => Promise.reject(error) }),
     );
     expect(result.outcome).toBe(expected);
+  });
+
+  it("classifies a connect failure that only carries errno", async () => {
+    const error = Object.assign(new Error("dns failure"), {
+      errno: "ENOTFOUND",
+    });
+    const result = await probeDatabase(
+      deps({ connect: () => Promise.reject(error) }),
+    );
+    expect(result.outcome).toBe("DB_CONNECTION_FAILED");
   });
 
   it("maps a connect failure whose message mentions timeout to DB_ACQUIRE_TIMEOUT", async () => {
@@ -160,6 +171,42 @@ describe("probeDatabase", () => {
     expect(result.outcome).toBe("DB_QUERY_TIMEOUT");
     expect(client.release).toHaveBeenCalledWith();
   });
+
+  it("runs SELECT 1 on the real client when no runCheck is injected", async () => {
+    const client = {
+      query: vi.fn(async () => ({ rows: [{ "?column?": 1 }] })),
+      release: vi.fn(),
+    } as unknown as PoolClient;
+    const result = await probeDatabase({
+      connect: () => Promise.resolve(client),
+      runCheck: undefined as never,
+      now: () => 0,
+    });
+    expect(result.outcome).toBe("DB_OK");
+    expect(client.query).toHaveBeenCalled();
+    expect(client.release).toHaveBeenCalledWith();
+  });
+
+  it.each([
+    ["no rows", { rows: [] }],
+    ["more than one row", { rows: [{ "?column?": 1 }, { "?column?": 1 }] }],
+    ["a missing rows array", {}],
+  ])(
+    "returns DB_QUERY_FAILED when SELECT 1 yields %s",
+    async (_label, resultSet) => {
+      const client = {
+        query: vi.fn(async () => resultSet),
+        release: vi.fn(),
+      } as unknown as PoolClient;
+      const result = await probeDatabase({
+        connect: () => Promise.resolve(client),
+        runCheck: undefined as never,
+        now: () => 0,
+      });
+      expect(result.outcome).toBe("DB_QUERY_FAILED");
+      expect(client.release).toHaveBeenCalledWith();
+    },
+  );
 
   it("reports elapsed milliseconds from the injected clock", async () => {
     let t = 0;

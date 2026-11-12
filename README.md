@@ -71,6 +71,27 @@ Pinned toolchain (all versions exact, chosen per spec 0001):
 - `pnpm db:up` / `pnpm db:down` start and stop Postgres
 - `pnpm test` Vitest suite, `pnpm test:e2e` Playwright suite
 
+## Local checks and formatting
+
+Run `pnpm check` before handing off a change. It runs `pnpm format:check`,
+`pnpm lint`, `pnpm typecheck`, and `pnpm test` in that order. It stops at
+the first failure. These checks do not rewrite maintained files or need
+a live database. Lint warnings count as failures.
+
+Run `pnpm format` to write formatting changes, review the diff, then run
+`pnpm check` again. Run `pnpm format:check` to check formatting without
+changing files. Both commands use `.devin/prettier.json` for settings and
+`.devin/prettier.ignore` for exclusions. Prettier formats supported project
+files, including Markdown, but skips generated output, dependencies,
+lockfiles, and private environment files. No Git hooks or hosted checks
+run these commands for you.
+
+Run `pnpm build` and `pnpm test:e2e` separately for regression coverage.
+Browser tests build and start their own production server. Port 3000 must
+be free, and Chromium must be installed for Playwright. Keep the existing
+isolated database test setup, never use personal financial records as
+fixtures.
+
 ## Troubleshooting
 
 - **"Cannot connect to the local database."** Check Docker is running and

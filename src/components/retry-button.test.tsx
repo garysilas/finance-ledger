@@ -14,9 +14,7 @@ import { RetryButton } from "./retry-button";
 describe("RetryButton", () => {
   it("renders an enabled button labelled Check again", () => {
     render(<RetryButton />);
-    expect(
-      screen.getByRole("button", { name: "Check again" }),
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled();
   });
 
   it("calls router.refresh once when activated", async () => {

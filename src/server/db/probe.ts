@@ -77,9 +77,7 @@ export async function probeDatabase(deps: ProbeDeps): Promise<ProbeResult> {
     delay(Math.max(0, deadline - now())),
   ]);
   if (acquired === "timeout") {
-    acquire
-      .then(({ client: late }) => late?.release())
-      .catch(() => {});
+    acquire.then(({ client: late }) => late?.release()).catch(() => {});
     return finish("DB_ACQUIRE_TIMEOUT", now, started);
   }
   if (acquired.error !== null) {
@@ -113,7 +111,11 @@ export async function probeDatabase(deps: ProbeDeps): Promise<ProbeResult> {
   return finish(outcome, now, started);
 }
 
-function finish(outcome: ProbeOutcome, now: () => number, started: number): ProbeResult {
+function finish(
+  outcome: ProbeOutcome,
+  now: () => number,
+  started: number,
+): ProbeResult {
   const durationMs = Math.round(now() - started);
   logDatabaseProbe(outcome, durationMs);
   return { outcome, durationMs };
@@ -125,5 +127,9 @@ export async function probeWithConfig(
 ): Promise<ProbeResult> {
   const { getPool } = await import("@/server/db/pool");
   const pool: Pool = getPool(databaseUrl);
-  return probeDatabase({ ...defaultDeps, connect: () => pool.connect(), ...overrides });
+  return probeDatabase({
+    ...defaultDeps,
+    connect: () => pool.connect(),
+    ...overrides,
+  });
 }

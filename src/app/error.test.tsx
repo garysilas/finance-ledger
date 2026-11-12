@@ -9,9 +9,7 @@ import ErrorPage from "./error";
 describe("ErrorPage", () => {
   it("shows the fixed failure message and a Try again control", () => {
     render(<ErrorPage reset={() => {}} />);
-    expect(
-      screen.getByRole("heading", { name: "Ledger" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ledger" })).toBeInTheDocument();
     expect(
       screen.getByText("Ledger could not show the status page."),
     ).toBeInTheDocument();
@@ -25,6 +23,18 @@ describe("ErrorPage", () => {
     const reset = vi.fn();
     render(<ErrorPage reset={reset} />);
     await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(reset).toHaveBeenCalledTimes(1);
+  });
+
+  it("is reachable and activatable by keyboard", async () => {
+    const user = userEvent.setup();
+    const reset = vi.fn();
+    render(<ErrorPage reset={reset} />);
+
+    await user.tab();
+    const button = screen.getByRole("button", { name: "Try again" });
+    expect(button).toHaveFocus();
+    await user.keyboard("{Enter}");
     expect(reset).toHaveBeenCalledTimes(1);
   });
 

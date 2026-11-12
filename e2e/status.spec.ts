@@ -1,10 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const VALID_STATES = [
-  "Available",
-  "Configuration needed",
-  "Unavailable",
-];
+const VALID_STATES = ["Available", "Configuration needed", "Unavailable"];
 
 const VALID_MESSAGES = [
   "The local database is available.",
@@ -81,9 +77,7 @@ test.describe("status page", () => {
   test("remains usable at a 320 pixel viewport", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 480 });
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: "Ledger" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ledger" })).toBeVisible();
     const button = page.getByRole("button", { name: "Check again" });
     await expect(button).toBeVisible();
     const box = await button.boundingBox();

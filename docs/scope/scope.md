@@ -23,26 +23,26 @@ Preferred stack is an owner proposal, not a scope decision: Next.js App Router, 
 
 ## At a glance
 
-| # | Feature | Phase | Status |
-|---|---|---|---|
-| 1 | Architecture and runnable scaffold | Foundation | done |
-| 2 | Coding standards and tooling | Foundation | planned |
-| 3 | Financial data foundation | Foundation | planned |
-| 4 | Design system and app shell | Foundation | planned |
-| 5 | Owner to first spending view | Slice 1 | planned |
-| 6 | Reliable sync and account overview | Slice 2 | planned |
-| 7 | Spending investigation | Slice 3 | planned |
-| 8 | Monthly category budgets | Slice 4 | planned |
-| 9 | Recurring charge suggestions | Slice 5 | planned |
-| 10 | Read only finance chat | Slice 6 | planned |
-| 11 | Generated finance views | Slice 7 | planned |
-| 12 | Confirmed budget proposals | Slice 8 | planned |
-| 13 | Recovery and v1 readiness | Slice 9 | planned |
-| 14 | Weekly AI review | Deferred | planned |
-| 15 | Anomaly alerts | Deferred | planned |
-| 16 | Savings goals | Deferred | planned |
-| 17 | Debt payoff | Deferred | planned |
-| 18 | Investments | Deferred | planned |
+| #   | Feature                            | Phase      | Status  |
+| --- | ---------------------------------- | ---------- | ------- |
+| 1   | Architecture and runnable scaffold | Foundation | done    |
+| 2   | Coding standards and tooling       | Foundation | done    |
+| 3   | Financial data foundation          | Foundation | planned |
+| 4   | Design system and app shell        | Foundation | planned |
+| 5   | Owner to first spending view       | Slice 1    | planned |
+| 6   | Reliable sync and account overview | Slice 2    | planned |
+| 7   | Spending investigation             | Slice 3    | planned |
+| 8   | Monthly category budgets           | Slice 4    | planned |
+| 9   | Recurring charge suggestions       | Slice 5    | planned |
+| 10  | Read only finance chat             | Slice 6    | planned |
+| 11  | Generated finance views            | Slice 7    | planned |
+| 12  | Confirmed budget proposals         | Slice 8    | planned |
+| 13  | Recovery and v1 readiness          | Slice 9    | planned |
+| 14  | Weekly AI review                   | Deferred   | planned |
+| 15  | Anomaly alerts                     | Deferred   | planned |
+| 16  | Savings goals                      | Deferred   | planned |
+| 17  | Debt payoff                        | Deferred   | planned |
+| 18  | Investments                        | Deferred   | planned |
 
 ## Foundations
 
@@ -60,13 +60,20 @@ Build the smallest runnable project from the confirmed architecture. Install onl
 - [x] Verify it: `/check verify architecture and runnable scaffold`
 - [x] Test it: `/test architecture and runnable scaffold`
 
-### 2. Coding standards and tooling · planned
+### 2. Coding standards and tooling · done
 
 Capture conventions from the real scaffold, then establish consistent checks for later work. Keep explanations useful for learning.
 
 **Done when:** root project guidance reflects the actual project, and formatting, lint, strict type checks, and the chosen automated checks run successfully.
 
-- [ ] Capture conventions and tooling choices: `/audit`
+**Spec:** [0002](../specs/0002-coding-standards-tooling.md), tooling content confirmed.
+**Code:** `package.json`, `pnpm-lock.yaml`, `.devin/prettier.json`, `.devin/prettier.ignore`, `README.md`
+
+- [x] Capture conventions and tooling choices: `/audit`
+- [x] Decide tooling (spec): `/architect tooling`
+- [x] Build from the standard: `/develop tooling`
+- [x] Verify it: `/check verify tooling`
+- [x] Test it: `/test tooling`
 
 ### 3. Financial data foundation · planned · needs a decision
 

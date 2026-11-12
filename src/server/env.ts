@@ -16,11 +16,12 @@ export interface AppConfig {
   databaseUrl: string;
 }
 
-export type EnvResult =
-  | { ok: true; config: AppConfig }
-  | { ok: false };
+export type EnvResult = { ok: true; config: AppConfig } | { ok: false };
 
-function urlMatchesSettings(raw: string, env: z.infer<typeof fileSchema>): boolean {
+function urlMatchesSettings(
+  raw: string,
+  env: z.infer<typeof fileSchema>,
+): boolean {
   let url: URL;
   try {
     url = new URL(raw);
@@ -34,14 +35,17 @@ function urlMatchesSettings(raw: string, env: z.infer<typeof fileSchema>): boole
   if (url.pathname !== `/${env.POSTGRES_DB}`) return false;
   try {
     if (decodeURIComponent(url.username) !== env.LEDGER_DB_USER) return false;
-    if (decodeURIComponent(url.password) !== env.LEDGER_DB_PASSWORD) return false;
+    if (decodeURIComponent(url.password) !== env.LEDGER_DB_PASSWORD)
+      return false;
   } catch {
     return false;
   }
   return true;
 }
 
-export function validateEnv(source: NodeJS.ProcessEnv = process.env): EnvResult {
+export function validateEnv(
+  source: NodeJS.ProcessEnv = process.env,
+): EnvResult {
   const parsed = fileSchema.safeParse({
     POSTGRES_DB: source.POSTGRES_DB,
     POSTGRES_USER: source.POSTGRES_USER,

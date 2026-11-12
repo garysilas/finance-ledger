@@ -17,21 +17,21 @@ This is the architecture decision for scope feature 1. Confirmation ratifies its
 
 ## Proposed stack
 
-| Layer | Choice | Reason |
-| :--- | :--- | :--- |
-| Application | One Next.js App Router application | Keep UI and server together with internal separation. |
-| Language | Strict TypeScript | Catch incompatible types before execution. Runtime validation remains necessary. |
-| Runtime | Node 24 LTS, Node runtime for database code | Use an established supported line and ordinary database connections. |
-| Package manager | pnpm | Use one lockfile and explicit dependency ownership. |
-| Styling | Tailwind | Establish the preferred CSS foundation without choosing the later visual system. |
-| Database | Postgres 18 in Docker Compose | Keep durable data local in a named volume. |
-| Database access | Drizzle with `pg` | Typed access with an ordinary Postgres driver. |
-| Schema changes | Drizzle Kit generated SQL, reviewed and explicitly applied | Preserve a migration history without startup schema changes. |
-| Configuration | Ignored local environment file, Zod validation | Validate settings while keeping secrets outside tracked files. |
-| Server interface | Direct service calls from Server Components | Avoid an internal HTTP API for server rendered reads. |
-| Later interfaces | Server Actions for application writes, Route Handlers for external callbacks | Preserve distinct application and external request boundaries. |
-| Diagnostics | Local safe console events | Record useful failures without external telemetry or payload logging. |
-| Initial checks | Production build, strict typecheck, Vitest, and Playwright with Chromium | Verify pure logic and the real browser path now. Feature 2 expands broader tooling. |
+| Layer            | Choice                                                                       | Reason                                                                              |
+| :--------------- | :--------------------------------------------------------------------------- | :---------------------------------------------------------------------------------- |
+| Application      | One Next.js App Router application                                           | Keep UI and server together with internal separation.                               |
+| Language         | Strict TypeScript                                                            | Catch incompatible types before execution. Runtime validation remains necessary.    |
+| Runtime          | Node 24 LTS, Node runtime for database code                                  | Use an established supported line and ordinary database connections.                |
+| Package manager  | pnpm                                                                         | Use one lockfile and explicit dependency ownership.                                 |
+| Styling          | Tailwind                                                                     | Establish the preferred CSS foundation without choosing the later visual system.    |
+| Database         | Postgres 18 in Docker Compose                                                | Keep durable data local in a named volume.                                          |
+| Database access  | Drizzle with `pg`                                                            | Typed access with an ordinary Postgres driver.                                      |
+| Schema changes   | Drizzle Kit generated SQL, reviewed and explicitly applied                   | Preserve a migration history without startup schema changes.                        |
+| Configuration    | Ignored local environment file, Zod validation                               | Validate settings while keeping secrets outside tracked files.                      |
+| Server interface | Direct service calls from Server Components                                  | Avoid an internal HTTP API for server rendered reads.                               |
+| Later interfaces | Server Actions for application writes, Route Handlers for external callbacks | Preserve distinct application and external request boundaries.                      |
+| Diagnostics      | Local safe console events                                                    | Record useful failures without external telemetry or payload logging.               |
+| Initial checks   | Production build, strict typecheck, Vitest, and Playwright with Chromium     | Verify pure logic and the real browser path now. Feature 2 expands broader tooling. |
 
 ### Version policy
 
@@ -59,10 +59,10 @@ Use one bounded `pg` pool per application process, reused during development rel
 
 The only application page is `GET /`. It displays Ledger's name, a short explanation that this is the local scaffold, database state, the last check time, and a retry control. No dashboard, fake balances, financial input, sign in screen, or visual design system is included.
 
-| Surface | Inputs | Output | Access and errors |
-| :--- | :--- | :--- | :--- |
+| Surface | Inputs                                   | Output                                                                            | Access and errors                                                                                                                                 |
+| :------ | :--------------------------------------- | :-------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `GET /` | Valid canonical Host, no user parameters | Server rendered status page, HTTP 200 for both database available and unavailable | Local scaffold only. Invalid Host returns 400. A present foreign Origin returns 403. Requests without Origin are allowed for ordinary navigation. |
-| Retry | Keyboard or pointer activation | Fresh request for `/`, visible loading state, then a new result | No data mutation, no automatic polling or hidden external request. |
+| Retry   | Keyboard or pointer activation           | Fresh request for `/`, visible loading state, then a new result                   | No data mutation, no automatic polling or hidden external request.                                                                                |
 
 A successful probe executes `SELECT 1` through Drizzle and `pg`. Retain Drizzle now to verify the exact selected database access stack. Defer Drizzle Kit installation and configuration until feature 3 introduces real migrations.
 
@@ -70,16 +70,16 @@ Send `Cache-Control: no-store` for `/`. Retry issues a fresh `GET /` without rel
 
 Use the following literal page copy: heading `Ledger`, explanation `Local scaffold. This page checks the connection to your local database.`, timestamp label `Last checked (UTC)`, retry label `Check again`, loading text `Checking database connection...`, and setup direction `See local setup and troubleshooting in README.md.`
 
-| Condition | HTTP behavior | Displayed state | Fixed message | Outcome code | Action |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| Expected query result | 200 | Available | `The local database is available.` | `DB_OK` | Check again. |
-| Missing, malformed, or inconsistent settings | 200 | Configuration needed | `Local database settings need attention.` | `CONFIG_INVALID` | Setup direction, then check again after correcting settings and restarting the app. |
-| Connection refused, network failure, or connection closure | 200 | Unavailable | `Cannot connect to the local database.` | `DB_CONNECTION_FAILED` | Setup direction and check again. |
-| Server reports invalid authorization or password | 200 | Unavailable | `Database sign in failed. Check your local credentials.` | `DB_AUTH_FAILED` | Setup direction, correct credentials, restart the app if settings changed, then check again. |
-| Connection acquisition deadline expires | 200 | Unavailable | `The database connection check timed out.` | `DB_ACQUIRE_TIMEOUT` | Check again. |
-| Query deadline or remaining whole probe budget expires after acquisition | 200 | Unavailable | `The database query check timed out.` | `DB_QUERY_TIMEOUT` | Check again. |
-| Other query failure or unexpected result | 200 | Unavailable | `The database check could not complete.` | `DB_QUERY_FAILED` | Setup direction and check again. |
-| Unexpected page failure | Generic framework error boundary, HTTP 500 if headers are not sent, otherwise retain the existing streamed status | Page error | `Ledger could not show the status page.` | `PAGE_FAILED` | Safe reload control labelled `Try again`. |
+| Condition                                                                | HTTP behavior                                                                                                     | Displayed state      | Fixed message                                            | Outcome code           | Action                                                                                       |
+| :----------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------- | :------------------- | :------------------------------------------------------- | :--------------------- | :------------------------------------------------------------------------------------------- |
+| Expected query result                                                    | 200                                                                                                               | Available            | `The local database is available.`                       | `DB_OK`                | Check again.                                                                                 |
+| Missing, malformed, or inconsistent settings                             | 200                                                                                                               | Configuration needed | `Local database settings need attention.`                | `CONFIG_INVALID`       | Setup direction, then check again after correcting settings and restarting the app.          |
+| Connection refused, network failure, or connection closure               | 200                                                                                                               | Unavailable          | `Cannot connect to the local database.`                  | `DB_CONNECTION_FAILED` | Setup direction and check again.                                                             |
+| Server reports invalid authorization or password                         | 200                                                                                                               | Unavailable          | `Database sign in failed. Check your local credentials.` | `DB_AUTH_FAILED`       | Setup direction, correct credentials, restart the app if settings changed, then check again. |
+| Connection acquisition deadline expires                                  | 200                                                                                                               | Unavailable          | `The database connection check timed out.`               | `DB_ACQUIRE_TIMEOUT`   | Check again.                                                                                 |
+| Query deadline or remaining whole probe budget expires after acquisition | 200                                                                                                               | Unavailable          | `The database query check timed out.`                    | `DB_QUERY_TIMEOUT`     | Check again.                                                                                 |
+| Other query failure or unexpected result                                 | 200                                                                                                               | Unavailable          | `The database check could not complete.`                 | `DB_QUERY_FAILED`      | Setup direction and check again.                                                             |
+| Unexpected page failure                                                  | Generic framework error boundary, HTTP 500 if headers are not sent, otherwise retain the existing streamed status | Page error           | `Ledger could not show the status page.`                 | `PAGE_FAILED`          | Safe reload control labelled `Try again`.                                                    |
 
 Prefer a recognized server authentication error over a generic connection error. Classify timeouts by the phase active when the deadline expires. Do not expose raw error text. Missing Docker and port conflicts are troubleshooting possibilities, not conclusions inferred from a failed database connection.
 
@@ -87,27 +87,27 @@ Host comparison includes the configured port. Origin comparison uses the exact c
 
 The status page has semantic headings, readable contrast, visible keyboard focus, a labelled retry control, and text status rather than color alone. Announce retry completion without repeatedly interrupting assistive technology. It must remain usable at a 320 CSS pixel viewport and normal desktop widths. Use local assets and a system font, with no runtime font or asset download.
 
-| Value produced | Source |
-| :--- | :--- |
-| Application name and explanation | Static scaffold copy in this spec. |
-| Database state | Current probe outcome or validated configuration failure. Never cached or fabricated. |
-| Last check time | Server clock when the probe or configuration check completes, serialized as UTC ISO 8601 and labelled UTC. This is diagnostic time, not the future finance time zone. |
-| Failure explanation | Fixed allowlisted messages selected by safe outcome code. |
-| Diagnostic duration | Monotonic elapsed time for that check, not financial data. |
-| Retry state | The current navigation or refresh lifecycle. |
+| Value produced                   | Source                                                                                                                                                                |
+| :------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application name and explanation | Static scaffold copy in this spec.                                                                                                                                    |
+| Database state                   | Current probe outcome or validated configuration failure. Never cached or fabricated.                                                                                 |
+| Last check time                  | Server clock when the probe or configuration check completes, serialized as UTC ISO 8601 and labelled UTC. This is diagnostic time, not the future finance time zone. |
+| Failure explanation              | Fixed allowlisted messages selected by safe outcome code.                                                                                                             |
+| Diagnostic duration              | Monotonic elapsed time for that check, not financial data.                                                                                                            |
+| Retry state                      | The current navigation or refresh lifecycle.                                                                                                                          |
 
 ### Configuration and durable storage
 
 Use `.env.local` as the private local settings file, with a tracked `.env.example` containing placeholders only. Compose must explicitly load that file. Protect the private file with owner read and write permissions. All settings below are required at runtime, except the bootstrap password is needed only by database operations, not by Next.js. Never use `NEXT_PUBLIC_` settings for them.
 
-| Setting | Source and validation |
-| :--- | :--- |
-| `POSTGRES_DB` | Owner setup value, default example `ledger`. Require an identifier matching `^[a-z][a-z0-9_]{0,62}$`. |
-| `POSTGRES_USER` | Required privileged bootstrap login for the official image, example `ledger_admin`. Same identifier rule. Never the application login. |
-| `POSTGRES_PASSWORD` | Required owner supplied random bootstrap password, distinct from the application password. No tracked default or production credential reuse. |
-| `LEDGER_DB_USER` | Required restricted application login, example `ledger_app`. Same identifier rule, distinct from `POSTGRES_USER`. |
-| `LEDGER_DB_PASSWORD` | Required owner supplied random application password. No tracked default or production credential reuse. |
-| `DATABASE_URL` | Required application URL. Scheme must be `postgresql:`, hostname exactly `127.0.0.1`, explicit port exactly `5432`, and path exactly one database identifier matching `POSTGRES_DB`. Require username and password, no query options or fragment. Decoded username and password must match `LEDGER_DB_USER` and `LEDGER_DB_PASSWORD`. |
+| Setting              | Source and validation                                                                                                                                                                                                                                                                                                                 |
+| :------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POSTGRES_DB`        | Owner setup value, default example `ledger`. Require an identifier matching `^[a-z][a-z0-9_]{0,62}$`.                                                                                                                                                                                                                                 |
+| `POSTGRES_USER`      | Required privileged bootstrap login for the official image, example `ledger_admin`. Same identifier rule. Never the application login.                                                                                                                                                                                                |
+| `POSTGRES_PASSWORD`  | Required owner supplied random bootstrap password, distinct from the application password. No tracked default or production credential reuse.                                                                                                                                                                                         |
+| `LEDGER_DB_USER`     | Required restricted application login, example `ledger_app`. Same identifier rule, distinct from `POSTGRES_USER`.                                                                                                                                                                                                                     |
+| `LEDGER_DB_PASSWORD` | Required owner supplied random application password. No tracked default or production credential reuse.                                                                                                                                                                                                                               |
+| `DATABASE_URL`       | Required application URL. Scheme must be `postgresql:`, hostname exactly `127.0.0.1`, explicit port exactly `5432`, and path exactly one database identifier matching `POSTGRES_DB`. Require username and password, no query options or fragment. Decoded username and password must match `LEDGER_DB_USER` and `LEDGER_DB_PASSWORD`. |
 
 Use explicit matching validation rather than silent credential generation. The owner supplies the values once in the local file and constructs the URL with correctly encoded credential components using the documented setup instructions. Zod based server validation checks URL structure and equality against the application settings without printing values. Container initialization reads the same file through Compose and creates the restricted login with that same application username and password. Never compare the application URL against the privileged bootstrap credentials.
 

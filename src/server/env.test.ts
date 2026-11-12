@@ -56,7 +56,8 @@ describe("validateEnv", () => {
     const env = {
       ...validEnv(),
       LEDGER_DB_USER: "ledger_admin",
-      DATABASE_URL: "postgresql://ledger_admin:app-secret@127.0.0.1:5432/ledger",
+      DATABASE_URL:
+        "postgresql://ledger_admin:app-secret@127.0.0.1:5432/ledger",
     };
     expect(validateEnv(env)).toEqual({ ok: false });
   });
@@ -73,18 +74,75 @@ describe("validateEnv", () => {
 
   it.each([
     ["a non-URL value", "not a url"],
-    ["a postgres scheme other than postgresql:", "postgres://ledger_app:app-secret@127.0.0.1:5432/ledger"],
-    ["a non-loopback host", "postgresql://ledger_app:app-secret@localhost:5432/ledger"],
+    [
+      "a postgres scheme other than postgresql:",
+      "postgres://ledger_app:app-secret@127.0.0.1:5432/ledger",
+    ],
+    [
+      "a non-loopback host",
+      "postgresql://ledger_app:app-secret@localhost:5432/ledger",
+    ],
     ["an implicit port", "postgresql://ledger_app:app-secret@127.0.0.1/ledger"],
-    ["a different port", "postgresql://ledger_app:app-secret@127.0.0.1:5433/ledger"],
-    ["a database name that differs from POSTGRES_DB", "postgresql://ledger_app:app-secret@127.0.0.1:5432/other"],
-    ["query options", "postgresql://ledger_app:app-secret@127.0.0.1:5432/ledger?sslmode=disable"],
-    ["a fragment", "postgresql://ledger_app:app-secret@127.0.0.1:5432/ledger#frag"],
-    ["a username that differs from LEDGER_DB_USER", "postgresql://someone:app-secret@127.0.0.1:5432/ledger"],
-    ["a password that differs from LEDGER_DB_PASSWORD", "postgresql://ledger_app:wrong@127.0.0.1:5432/ledger"],
+    [
+      "a different port",
+      "postgresql://ledger_app:app-secret@127.0.0.1:5433/ledger",
+    ],
+    [
+      "a database name that differs from POSTGRES_DB",
+      "postgresql://ledger_app:app-secret@127.0.0.1:5432/other",
+    ],
+    [
+      "query options",
+      "postgresql://ledger_app:app-secret@127.0.0.1:5432/ledger?sslmode=disable",
+    ],
+    [
+      "a fragment",
+      "postgresql://ledger_app:app-secret@127.0.0.1:5432/ledger#frag",
+    ],
+    [
+      "a username that differs from LEDGER_DB_USER",
+      "postgresql://someone:app-secret@127.0.0.1:5432/ledger",
+    ],
+    [
+      "a password that differs from LEDGER_DB_PASSWORD",
+      "postgresql://ledger_app:wrong@127.0.0.1:5432/ledger",
+    ],
     ["missing credentials", "postgresql://127.0.0.1:5432/ledger"],
   ])("rejects DATABASE_URL with %s", (_label, url) => {
     const env = { ...validEnv(), DATABASE_URL: url };
+    expect(validateEnv(env)).toEqual({ ok: false });
+  });
+
+  it("accepts the maximum 63 character identifier", () => {
+    const db = `a${"b".repeat(62)}`;
+    const env = {
+      ...validEnv(),
+      POSTGRES_DB: db,
+      DATABASE_URL: `postgresql://ledger_app:app-secret@127.0.0.1:5432/${db}`,
+    };
+    expect(validateEnv(env)).toEqual({
+      ok: true,
+      config: { databaseUrl: env.DATABASE_URL },
+    });
+  });
+
+  it("accepts a URL encoded username that decodes to the configured value", () => {
+    const env = {
+      ...validEnv(),
+      DATABASE_URL:
+        "postgresql://ledger%5Fapp:app-secret@127.0.0.1:5432/ledger",
+    };
+    expect(validateEnv(env)).toEqual({
+      ok: true,
+      config: { databaseUrl: env.DATABASE_URL },
+    });
+  });
+
+  it("rejects a DATABASE_URL with a malformed percent escape", () => {
+    const env = {
+      ...validEnv(),
+      DATABASE_URL: "postgresql://ledger_app:%E0%A4%A@127.0.0.1:5432/ledger",
+    };
     expect(validateEnv(env)).toEqual({ ok: false });
   });
 
@@ -92,9 +150,13 @@ describe("validateEnv", () => {
     const env = {
       ...validEnv(),
       LEDGER_DB_PASSWORD: "p@ss/word",
-      DATABASE_URL: "postgresql://ledger_app:p%40ss%2Fword@127.0.0.1:5432/ledger",
+      DATABASE_URL:
+        "postgresql://ledger_app:p%40ss%2Fword@127.0.0.1:5432/ledger",
     };
-    expect(validateEnv(env)).toEqual({ ok: true, config: { databaseUrl: env.DATABASE_URL } });
+    expect(validateEnv(env)).toEqual({
+      ok: true,
+      config: { databaseUrl: env.DATABASE_URL },
+    });
   });
 
   it("uses process.env when no source is given", () => {
