@@ -1,7 +1,7 @@
 # 0003. Financial data foundation
 
 **Date**: 2026-11-12
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 

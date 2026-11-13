@@ -11,7 +11,7 @@ import {
   type Classification,
 } from "./classification";
 import { parseCalendarDate } from "./dates";
-import { failure, type ServiceResult } from "./errors";
+import { failure, ok, type ServiceResult } from "./errors";
 import { parseMoneyToUnits } from "./money";
 import {
   cursorText,
@@ -185,6 +185,31 @@ export async function applyProviderBatch(
   );
   const sortedRemovals = [...input.removalIds].sort();
 
+  // The receipt digest binds validated, normalized values: decimal
+  // spellings canonicalize to integer units so an equivalent retry
+  // replays instead of conflicting.
+  const digestAccounts = [];
+  for (const account of sortedAccounts) {
+    const units = parseAccountUnits(account);
+    if (!units.ok) {
+      return failure(units.code);
+    }
+    digestAccounts.push({
+      ...account,
+      current: units.value.current,
+      available: units.value.available,
+      creditLimit: units.value.credit,
+    });
+  }
+  const digestUpserts = [];
+  for (const upsert of sortedUpserts) {
+    const amount = parseMoneyToUnits(upsert.amount, upsert.currencyCode);
+    if (!amount.ok) {
+      return failure(amount.code);
+    }
+    digestUpserts.push({ ...upsert, amount: amount.value.units });
+  }
+
   return runMutation({
     databaseUrl,
     ownerId: input.ownerId,
@@ -197,8 +222,8 @@ export async function applyProviderBatch(
       connectionId: input.connectionId,
       expectedCursor: input.expectedCursor,
       nextCursor: input.nextCursor,
-      accountObservations: sortedAccounts,
-      transactionUpserts: sortedUpserts,
+      accountObservations: digestAccounts,
+      transactionUpserts: digestUpserts,
       removalIds: sortedRemovals,
     },
     work: async (db) => {
@@ -338,53 +363,70 @@ function resolveProviderCategory(
   return found.id;
 }
 
+type AccountUnits = {
+  currencyScale: number | null;
+  current: bigint | null;
+  available: bigint | null;
+  credit: bigint | null;
+};
+
+// Parse the optional balance amounts. Amounts require a currency code;
+// a present code is validated even when every amount is absent so the
+// digest and the write path reject the same inputs.
+function parseAccountUnits(
+  account: z.infer<typeof accountObservation>,
+): ServiceResult<AccountUnits> {
+  const units: AccountUnits = {
+    currencyScale: null,
+    current: null,
+    available: null,
+    credit: null,
+  };
+  const hasAmounts =
+    account.current !== null ||
+    account.available !== null ||
+    account.creditLimit !== null;
+  if (account.currencyCode === null && !hasAmounts) {
+    return ok(units);
+  }
+  if (account.currencyCode === null) {
+    return failure("INVALID_INPUT");
+  }
+  const probe = parseMoneyToUnits("0", account.currencyCode);
+  if (!probe.ok) {
+    return failure(probe.code);
+  }
+  units.currencyScale = probe.value.scale;
+  const pairs = [
+    [account.current, "current"],
+    [account.available, "available"],
+    [account.creditLimit, "credit"],
+  ] as const;
+  for (const [value, key] of pairs) {
+    if (value !== null) {
+      const amount = parseMoneyToUnits(value, account.currencyCode);
+      if (!amount.ok) {
+        return failure(amount.code);
+      }
+      units[key] = amount.value.units;
+    }
+  }
+  return ok(units);
+}
+
 async function upsertAccount(
   db: Db,
   input: { ownerId: string; connectionId: string },
   account: z.infer<typeof accountObservation>,
 ): Promise<"inserted" | "updated"> {
-  let currencyScale: number | null = null;
-  const units: {
-    current: bigint | null;
-    available: bigint | null;
-    credit: bigint | null;
-  } = {
-    current: null,
-    available: null,
-    credit: null,
-  };
-
-  const hasAmounts =
-    account.current !== null ||
-    account.available !== null ||
-    account.creditLimit !== null;
-  if (account.currencyCode !== null || hasAmounts) {
-    if (account.currencyCode === null) {
-      throw new OpFailure("INVALID_INPUT");
-    }
-    const parsed = parseMoneyToUnits("0", account.currencyCode);
-    if (!parsed.ok) {
-      throw new OpFailure(parsed.code);
-    }
-    currencyScale = parsed.value.scale;
-    const pairs = [
-      [account.current, "current"],
-      [account.available, "available"],
-      [account.creditLimit, "credit"],
-    ] as const;
-    for (const [value, key] of pairs) {
-      if (value !== null) {
-        const amount = parseMoneyToUnits(value, account.currencyCode);
-        if (!amount.ok) {
-          throw new OpFailure(amount.code);
-        }
-        units[key] = amount.value.units;
-      }
-    }
+  const parsed = parseAccountUnits(account);
+  if (!parsed.ok) {
+    throw new OpFailure(parsed.code);
   }
-  const currentUnits = units.current;
-  const availableUnits = units.available;
-  const creditLimitUnits = units.credit;
+  const currencyScale = parsed.value.currencyScale;
+  const currentUnits = parsed.value.current;
+  const availableUnits = parsed.value.available;
+  const creditLimitUnits = parsed.value.credit;
 
   const existing = await db.query<{ id: string }>(
     `SELECT id FROM ledger.account
@@ -553,7 +595,10 @@ async function upsertTransaction(
   let changedOwnerField = false;
 
   if (classificationIntent === "inherited") {
-    if (!classificationMatchesAmount(classification as Classification, units)) {
+    if (
+      ownerClassification !== null &&
+      !classificationMatchesAmount(ownerClassification as Classification, units)
+    ) {
       // A provider amount change invalidated the inherited classification:
       // clear only that inherited field, report the conflict, restore
       // untouched intent.

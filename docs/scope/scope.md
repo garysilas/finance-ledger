@@ -27,7 +27,7 @@ Preferred stack is an owner proposal, not a scope decision: Next.js App Router, 
 | --- | ---------------------------------- | ---------- | ----------- |
 | 1   | Architecture and runnable scaffold | Foundation | done        |
 | 2   | Coding standards and tooling       | Foundation | done        |
-| 3   | Financial data foundation          | Foundation | in-progress |
+| 3   | Financial data foundation          | Foundation | done        |
 | 4   | Design system and app shell        | Foundation | planned     |
 | 5   | Owner to first spending view       | Slice 1    | planned     |
 | 6   | Reliable sync and account overview | Slice 2    | planned     |
@@ -75,7 +75,7 @@ Capture conventions from the real scaffold, then establish consistent checks for
 - [x] Verify it: `/check verify tooling`
 - [x] Test it: `/test tooling`
 
-### 3. Financial data foundation · in-progress
+### 3. Financial data foundation · done
 
 Define the durable financial records, ownership, money rules, and migration boundaries. Establish only the core structures required by early slices, with clear extension points.
 
@@ -90,8 +90,8 @@ Define the durable financial records, ownership, money rules, and migration boun
   2. Complete atomic imports, deterministic retries, pending replacement, owner intent, and currency rules (AC-2, AC-4, AC-5, AC-6, AC-11, AC-12).
   3. Add monthly budgets, category totals, coverage metadata, and measured query performance (AC-3, AC-7, AC-10, AC-12).
   4. Complete key failure handling, local disconnect, safe operation instructions, and regression checks (AC-1 through AC-12).
-- [ ] Verify it: `/check verify financial data foundation`
-- [ ] Test it: `/test financial data foundation`
+- [x] Verify it: `/check verify financial data foundation`
+- [x] Test it: `/test financial data foundation`
 
 ### 4. Design system and app shell · planned · needs a decision
 
