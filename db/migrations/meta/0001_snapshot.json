@@ -1,0 +1,1197 @@
+{
+  "id": "8ebe0592-a3b0-40e2-95e7-e6a56143a692",
+  "prevId": "bc5cb7c5-6ae8-4069-abce-9732e98a490f",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "ledger.account": {
+      "name": "account",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_account_id": {
+          "name": "provider_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "official_name": {
+          "name": "official_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subtype": {
+          "name": "subtype",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency_scale": {
+          "name": "currency_scale",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_units": {
+          "name": "current_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "available_units": {
+          "name": "available_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credit_limit_units": {
+          "name": "credit_limit_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "balance_observed_at": {
+          "name": "balance_observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "1"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "account_owner_fk": {
+          "name": "account_owner_fk",
+          "tableFrom": "account",
+          "tableTo": "owner",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "account_owner_connection_fk": {
+          "name": "account_owner_connection_fk",
+          "tableFrom": "account",
+          "tableTo": "connection",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id", "connection_id"],
+          "columnsTo": ["owner_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "account_connection_provider_key": {
+          "name": "account_connection_provider_key",
+          "nullsNotDistinct": false,
+          "columns": ["connection_id", "provider_account_id"]
+        },
+        "account_owner_connection_id_key": {
+          "name": "account_owner_connection_id_key",
+          "nullsNotDistinct": false,
+          "columns": ["owner_id", "connection_id", "id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "account_currency_group": {
+          "name": "account_currency_group",
+          "value": "((\"ledger\".\"account\".\"currency_code\" IS NULL AND \"ledger\".\"account\".\"currency_scale\" IS NULL) OR (\"ledger\".\"account\".\"currency_code\" IS NOT NULL AND \"ledger\".\"account\".\"currency_scale\" IS NOT NULL))"
+        },
+        "account_amounts_require_currency": {
+          "name": "account_amounts_require_currency",
+          "value": "((\"ledger\".\"account\".\"current_units\" IS NULL AND \"ledger\".\"account\".\"available_units\" IS NULL AND \"ledger\".\"account\".\"credit_limit_units\" IS NULL) OR \"ledger\".\"account\".\"currency_code\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "ledger.audit": {
+      "name": "audit",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "receipt_id": {
+          "name": "receipt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resulting_revision": {
+          "name": "resulting_revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "audit_owner_fk": {
+          "name": "audit_owner_fk",
+          "tableFrom": "audit",
+          "tableTo": "owner",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "audit_receipt_fk": {
+          "name": "audit_receipt_fk",
+          "tableFrom": "audit",
+          "tableTo": "request_receipt",
+          "schemaTo": "ledger",
+          "columnsFrom": ["receipt_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "audit_actor_type": {
+          "name": "audit_actor_type",
+          "value": "\"ledger\".\"audit\".\"actor_type\" IN ('owner', 'provider', 'setup')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "ledger.budget": {
+      "name": "budget",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category_id": {
+          "name": "category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "month": {
+          "name": "month",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "limit_units": {
+          "name": "limit_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "1"
+        }
+      },
+      "indexes": {
+        "budget_owner_month_idx": {
+          "name": "budget_owner_month_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "month",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "budget_category_fk": {
+          "name": "budget_category_fk",
+          "tableFrom": "budget",
+          "tableTo": "category",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id", "category_id"],
+          "columnsTo": ["owner_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "budget_owner_category_month_key": {
+          "name": "budget_owner_category_month_key",
+          "nullsNotDistinct": false,
+          "columns": ["owner_id", "category_id", "month"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "budget_limit_nonnegative": {
+          "name": "budget_limit_nonnegative",
+          "value": "\"ledger\".\"budget\".\"limit_units\" >= 0"
+        },
+        "budget_month_first_day": {
+          "name": "budget_month_first_day",
+          "value": "date_trunc('month', \"ledger\".\"budget\".\"month\"::timestamp) = \"ledger\".\"budget\".\"month\"::timestamp"
+        },
+        "budget_currency_usd": {
+          "name": "budget_currency_usd",
+          "value": "\"ledger\".\"budget\".\"currency_code\" = 'USD'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "ledger.category": {
+      "name": "category",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stable_key": {
+          "name": "stable_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "1"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "category_owner_fk": {
+          "name": "category_owner_fk",
+          "tableFrom": "category",
+          "tableTo": "owner",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "category_owner_stable_key": {
+          "name": "category_owner_stable_key",
+          "nullsNotDistinct": false,
+          "columns": ["owner_id", "stable_key"]
+        },
+        "category_owner_id_key": {
+          "name": "category_owner_id_key",
+          "nullsNotDistinct": false,
+          "columns": ["owner_id", "id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "ledger.connection": {
+      "name": "connection",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_item_id": {
+          "name": "provider_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "institution_id": {
+          "name": "institution_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "institution_name": {
+          "name": "institution_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "token_version": {
+          "name": "token_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_key_id": {
+          "name": "token_key_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_nonce": {
+          "name": "token_nonce",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_ciphertext": {
+          "name": "token_ciphertext",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_tag": {
+          "name": "token_tag",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sync_cursor": {
+          "name": "sync_cursor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_successful_sync_at": {
+          "name": "last_successful_sync_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "1"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "connection_owner_fk": {
+          "name": "connection_owner_fk",
+          "tableFrom": "connection",
+          "tableTo": "owner",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "connection_provider_item_key": {
+          "name": "connection_provider_item_key",
+          "nullsNotDistinct": false,
+          "columns": ["provider", "environment", "provider_item_id"]
+        },
+        "connection_owner_id_key": {
+          "name": "connection_owner_id_key",
+          "nullsNotDistinct": false,
+          "columns": ["owner_id", "id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "connection_state": {
+          "name": "connection_state",
+          "value": "\"ledger\".\"connection\".\"state\" IN ('active', 'needs_reconnect', 'disconnected')"
+        },
+        "connection_envelope_group": {
+          "name": "connection_envelope_group",
+          "value": "((\"ledger\".\"connection\".\"token_version\" IS NULL AND \"ledger\".\"connection\".\"token_key_id\" IS NULL AND \"ledger\".\"connection\".\"token_nonce\" IS NULL AND \"ledger\".\"connection\".\"token_ciphertext\" IS NULL AND \"ledger\".\"connection\".\"token_tag\" IS NULL) OR (\"ledger\".\"connection\".\"token_version\" IS NOT NULL AND \"ledger\".\"connection\".\"token_key_id\" IS NOT NULL AND \"ledger\".\"connection\".\"token_nonce\" IS NOT NULL AND \"ledger\".\"connection\".\"token_ciphertext\" IS NOT NULL AND \"ledger\".\"connection\".\"token_tag\" IS NOT NULL))"
+        },
+        "connection_state_envelope": {
+          "name": "connection_state_envelope",
+          "value": "((\"ledger\".\"connection\".\"state\" = 'disconnected' AND \"ledger\".\"connection\".\"token_version\" IS NULL) OR (\"ledger\".\"connection\".\"state\" <> 'disconnected' AND \"ledger\".\"connection\".\"token_version\" IS NOT NULL))"
+        },
+        "connection_provider_environment": {
+          "name": "connection_provider_environment",
+          "value": "\"ledger\".\"connection\".\"provider\" = 'plaid' AND \"ledger\".\"connection\".\"environment\" = 'sandbox'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "ledger.owner": {
+      "name": "owner",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "singleton_flag": {
+          "name": "singleton_flag",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "time_zone": {
+          "name": "time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'America/New_York'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "owner_singleton_key": {
+          "name": "owner_singleton_key",
+          "nullsNotDistinct": false,
+          "columns": ["singleton_flag"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "owner_singleton_flag": {
+          "name": "owner_singleton_flag",
+          "value": "\"ledger\".\"owner\".\"singleton_flag\""
+        },
+        "owner_time_zone": {
+          "name": "owner_time_zone",
+          "value": "\"ledger\".\"owner\".\"time_zone\" = 'America/New_York'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "ledger.request_receipt": {
+      "name": "request_receipt",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_digest": {
+          "name": "request_digest",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resulting_revision": {
+          "name": "resulting_revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation_counts": {
+          "name": "operation_counts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "committed_cursor": {
+          "name": "committed_cursor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correction_conflicts": {
+          "name": "correction_conflicts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "request_receipt_owner_fk": {
+          "name": "request_receipt_owner_fk",
+          "tableFrom": "request_receipt",
+          "tableTo": "owner",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "request_receipt_owner_operation_request_key": {
+          "name": "request_receipt_owner_operation_request_key",
+          "nullsNotDistinct": false,
+          "columns": ["owner_id", "operation", "request_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "request_receipt_outcome": {
+          "name": "request_receipt_outcome",
+          "value": "\"ledger\".\"request_receipt\".\"outcome\" IN ('applied', 'no_change')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "ledger.transaction": {
+      "name": "transaction",
+      "schema": "ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_transaction_id": {
+          "name": "provider_transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_units": {
+          "name": "amount_units",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency_scale": {
+          "name": "currency_scale",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "posting_state": {
+          "name": "posting_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_date": {
+          "name": "provider_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "posted_date": {
+          "name": "posted_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "authorized_date": {
+          "name": "authorized_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superseded_by_id": {
+          "name": "superseded_by_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_pending_transaction_id": {
+          "name": "provider_pending_transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "merchant_name": {
+          "name": "merchant_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_category_code": {
+          "name": "provider_category_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_category_id": {
+          "name": "provider_category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_classification": {
+          "name": "provider_classification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner_category_id": {
+          "name": "owner_category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner_classification": {
+          "name": "owner_classification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "category_intent": {
+          "name": "category_intent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'untouched'"
+        },
+        "classification_intent": {
+          "name": "classification_intent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'untouched'"
+        },
+        "category_inherited_from_id": {
+          "name": "category_inherited_from_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "classification_inherited_from_id": {
+          "name": "classification_inherited_from_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner_edit_revision": {
+          "name": "owner_edit_revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "1"
+        }
+      },
+      "indexes": {
+        "transaction_owner_posted_date_idx": {
+          "name": "transaction_owner_posted_date_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "posted_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transaction_account_provider_date_idx": {
+          "name": "transaction_account_provider_date_idx",
+          "columns": [
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "transaction_owner_fk": {
+          "name": "transaction_owner_fk",
+          "tableFrom": "transaction",
+          "tableTo": "owner",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "transaction_account_fk": {
+          "name": "transaction_account_fk",
+          "tableFrom": "transaction",
+          "tableTo": "account",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id", "connection_id", "account_id"],
+          "columnsTo": ["owner_id", "connection_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "transaction_superseded_fk": {
+          "name": "transaction_superseded_fk",
+          "tableFrom": "transaction",
+          "tableTo": "transaction",
+          "schemaTo": "ledger",
+          "columnsFrom": [
+            "owner_id",
+            "connection_id",
+            "account_id",
+            "superseded_by_id"
+          ],
+          "columnsTo": ["owner_id", "connection_id", "account_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "transaction_category_inherited_fk": {
+          "name": "transaction_category_inherited_fk",
+          "tableFrom": "transaction",
+          "tableTo": "transaction",
+          "schemaTo": "ledger",
+          "columnsFrom": [
+            "owner_id",
+            "connection_id",
+            "account_id",
+            "category_inherited_from_id"
+          ],
+          "columnsTo": ["owner_id", "connection_id", "account_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "transaction_classification_inherited_fk": {
+          "name": "transaction_classification_inherited_fk",
+          "tableFrom": "transaction",
+          "tableTo": "transaction",
+          "schemaTo": "ledger",
+          "columnsFrom": [
+            "owner_id",
+            "connection_id",
+            "account_id",
+            "classification_inherited_from_id"
+          ],
+          "columnsTo": ["owner_id", "connection_id", "account_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "transaction_provider_category_fk": {
+          "name": "transaction_provider_category_fk",
+          "tableFrom": "transaction",
+          "tableTo": "category",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id", "provider_category_id"],
+          "columnsTo": ["owner_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "transaction_owner_category_fk": {
+          "name": "transaction_owner_category_fk",
+          "tableFrom": "transaction",
+          "tableTo": "category",
+          "schemaTo": "ledger",
+          "columnsFrom": ["owner_id", "owner_category_id"],
+          "columnsTo": ["owner_id", "id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "transaction_connection_provider_key": {
+          "name": "transaction_connection_provider_key",
+          "nullsNotDistinct": false,
+          "columns": ["connection_id", "provider_transaction_id"]
+        },
+        "transaction_owner_connection_account_id_key": {
+          "name": "transaction_owner_connection_account_id_key",
+          "nullsNotDistinct": false,
+          "columns": ["owner_id", "connection_id", "account_id", "id"]
+        },
+        "transaction_superseded_by_key": {
+          "name": "transaction_superseded_by_key",
+          "nullsNotDistinct": false,
+          "columns": ["superseded_by_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "transaction_posting_state": {
+          "name": "transaction_posting_state",
+          "value": "\"ledger\".\"transaction\".\"posting_state\" IN ('pending', 'posted')"
+        },
+        "transaction_posted_date": {
+          "name": "transaction_posted_date",
+          "value": "((\"ledger\".\"transaction\".\"posting_state\" = 'posted' AND \"ledger\".\"transaction\".\"posted_date\" IS NOT NULL) OR (\"ledger\".\"transaction\".\"posting_state\" = 'pending' AND \"ledger\".\"transaction\".\"posted_date\" IS NULL))"
+        },
+        "transaction_no_self_link": {
+          "name": "transaction_no_self_link",
+          "value": "\"ledger\".\"transaction\".\"superseded_by_id\" <> \"ledger\".\"transaction\".\"id\""
+        },
+        "transaction_category_intent": {
+          "name": "transaction_category_intent",
+          "value": "\"ledger\".\"transaction\".\"category_intent\" IN ('untouched', 'override', 'reset', 'inherited')"
+        },
+        "transaction_classification_intent": {
+          "name": "transaction_classification_intent",
+          "value": "\"ledger\".\"transaction\".\"classification_intent\" IN ('untouched', 'override', 'reset', 'inherited')"
+        },
+        "transaction_category_intent_consistency": {
+          "name": "transaction_category_intent_consistency",
+          "value": "((\"ledger\".\"transaction\".\"category_intent\" IN ('untouched', 'reset') AND \"ledger\".\"transaction\".\"owner_category_id\" IS NULL AND \"ledger\".\"transaction\".\"category_inherited_from_id\" IS NULL) OR (\"ledger\".\"transaction\".\"category_intent\" = 'override' AND \"ledger\".\"transaction\".\"owner_category_id\" IS NOT NULL AND \"ledger\".\"transaction\".\"category_inherited_from_id\" IS NULL) OR (\"ledger\".\"transaction\".\"category_intent\" = 'inherited' AND \"ledger\".\"transaction\".\"owner_category_id\" IS NOT NULL AND \"ledger\".\"transaction\".\"category_inherited_from_id\" IS NOT NULL))"
+        },
+        "transaction_classification_intent_consistency": {
+          "name": "transaction_classification_intent_consistency",
+          "value": "((\"ledger\".\"transaction\".\"classification_intent\" IN ('untouched', 'reset') AND \"ledger\".\"transaction\".\"owner_classification\" IS NULL AND \"ledger\".\"transaction\".\"classification_inherited_from_id\" IS NULL) OR (\"ledger\".\"transaction\".\"classification_intent\" = 'override' AND \"ledger\".\"transaction\".\"owner_classification\" IS NOT NULL AND \"ledger\".\"transaction\".\"classification_inherited_from_id\" IS NULL) OR (\"ledger\".\"transaction\".\"classification_intent\" = 'inherited' AND \"ledger\".\"transaction\".\"owner_classification\" IS NOT NULL AND \"ledger\".\"transaction\".\"classification_inherited_from_id\" IS NOT NULL))"
+        },
+        "transaction_provider_classification": {
+          "name": "transaction_provider_classification",
+          "value": "\"ledger\".\"transaction\".\"provider_classification\" IS NULL OR \"ledger\".\"transaction\".\"provider_classification\" IN ('spending', 'refund', 'income', 'transfer', 'card_payment', 'unclassified')"
+        },
+        "transaction_owner_classification": {
+          "name": "transaction_owner_classification",
+          "value": "\"ledger\".\"transaction\".\"owner_classification\" IS NULL OR \"ledger\".\"transaction\".\"owner_classification\" IN ('spending', 'refund', 'income', 'transfer', 'card_payment', 'unclassified')"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "ledger": "ledger"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

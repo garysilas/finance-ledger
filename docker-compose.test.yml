@@ -1,0 +1,19 @@
+# Isolated test database per spec 0001: separate Compose project and
+# volume, fixed loopback port 5433, never sharing credentials or data
+# with the application database.
+services:
+  postgres:
+    image: postgres:18@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    container_name: ledger-test-postgres
+    env_file:
+      - path: .env.test.local
+        required: true
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - ledger-test-pgdata:/var/lib/postgresql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./db/provision:/ledger-provision:ro
+
+volumes:
+  ledger-test-pgdata:

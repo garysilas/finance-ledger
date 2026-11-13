@@ -71,6 +71,51 @@ Pinned toolchain (all versions exact, chosen per spec 0001):
 - `pnpm db:up` / `pnpm db:down` start and stop Postgres
 - `pnpm test` Vitest suite, `pnpm test:e2e` Playwright suite
 
+## Financial data
+
+Financial records live in the `ledger` schema under three logins: the
+bootstrap login (`POSTGRES_*`) only for provisioning, the migration login
+(`LEDGER_MIGRATION_*`, owns the schema, CLI only), and the restricted
+application login (`LEDGER_DB_*`, data access only, no DELETE, no schema
+changes, no audit or receipt mutation).
+
+Migration commands:
+
+- `pnpm db:generate` diffs `src/server/db/schema.ts` into reviewed SQL in
+  `db/migrations/`. Generation needs no live database or secrets; review
+  the SQL before applying.
+- `pnpm db:migrate` applies pending migrations as the migration role,
+  then refreshes the application role's exact table grants. Requires
+  `MIGRATION_DATABASE_URL` and `LEDGER_DB_USER` in the environment (for
+  example `set -a; . ./.env.local; set +a`). Failures stop; fix forward
+  with a corrective migration, never by editing applied history.
+- `pnpm db:provision-migration-role` provisions the migration role and
+  ledger schema on an existing data volume (fresh volumes do this at
+  init). Safe to rerun; it never changes an existing role's password or
+  deletes data.
+
+Provider tokens are encrypted with AES 256 GCM using an owner key file
+outside the repository, configured by `LEDGER_TOKEN_KEY_PATH` and
+`LEDGER_TOKEN_KEY_ID`:
+
+- `pnpm db:create-token-key` creates the key file once and refuses to
+  overwrite it. Keep a separate secure backup of the file and its key
+  ID; database backups hold only encrypted envelopes, so restoring
+  tokens requires both.
+- A missing or unreadable key blocks token operations only; stored
+  history stays readable. Recovery requires the matching key backup or
+  an explicit provider reconnect in a later feature; there is no silent
+  key replacement.
+
+Isolated database checks use the test Compose project:
+
+- `pnpm db:test:up` / `pnpm db:test:down` manage `ledger-test-postgres`
+  on 127.0.0.1:5433 with its own `ledger-test-pgdata` volume and
+  `ledger_test` prefixed roles from `.env.test.local`
+  (copy `.env.test.example`). `TEST_DATABASE_URL` and
+  `TEST_MIGRATION_DATABASE_URL` point there and never fall back to the
+  application database.
+
 ## Local checks and formatting
 
 Run `pnpm check` before handing off a change. It runs `pnpm format:check`,

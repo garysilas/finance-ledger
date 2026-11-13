@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794531021731,
+      "tag": "0000_0000_financial_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794531272918,
+      "tag": "0001_budget",
+      "breakpoints": true
+    }
+  ]
+}
