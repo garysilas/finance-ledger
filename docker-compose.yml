@@ -10,6 +10,7 @@ services:
     volumes:
       - ledger-pgdata:/var/lib/postgresql
       - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./db/provision:/ledger-provision:ro
 
 volumes:
   ledger-pgdata:
