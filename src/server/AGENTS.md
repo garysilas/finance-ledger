@@ -2,15 +2,18 @@
 
 ## Overview
 
-This area owns private settings, the database connection check, and safe diagnostics. Root project rules also apply. It does not contain financial tables or provider integrations yet.
+This area owns private settings, the database connection check, safe diagnostics, the financial schema, and encrypted token storage. Root project rules also apply. Provider integrations are not here yet.
 
 ## Key files
 
 1. `env.ts` validates settings and returns only the application database URL or a safe failure.
-2. `status.ts` checks settings before probing and adds a fresh UTC timestamp.
+2. `status.ts` checks settings before probing and adds a fresh UTC timestamp. `checkDatabaseStatus` is wrapped in React `cache()` so all callers in one request share a single probe and one log line.
 3. `db/pool.ts` owns the shared process pool.
 4. `db/probe.ts` runs `SELECT 1` through Drizzle and handles deadlines and resource cleanup.
 5. `diagnostics.ts` defines fixed outcome codes and safe database events.
+6. `tokens.ts` encrypts and decrypts provider access tokens with a versioned envelope and a file backed owner key; it never logs paths, key material, or crypto exceptions.
+7. `db/schema.ts` defines the financial tables in Drizzle; generated SQL lives in `db/migrations/`.
+8. `db/finance.ts` runs finance operations inside one unit of work with deadlines and rollback on `OpFailure`.
 
 ## Conventions
 
@@ -31,5 +34,6 @@ The current validator requires `POSTGRES_PASSWORD` at runtime, even though spec 
 ## Related specs
 
 [Spec 0001](../../docs/specs/0001-architecture-runnable-scaffold/index.md) defines configuration, database limits, failure behavior, and security boundaries.
+[Spec 0003](../../docs/specs/0003-financial-data-foundation/index.md) defines the financial schema, migration roles, and token encryption handled here.
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

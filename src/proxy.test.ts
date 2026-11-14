@@ -10,6 +10,21 @@ function request(headers: Record<string, string> = {}) {
 }
 
 describe("proxy", () => {
+  it.each(["/status", "/design", "/accounts/future"])(
+    "AC-4 enforces request boundaries at %s",
+    async (path) => {
+      const local = new NextRequest(`http://127.0.0.1:3000${path}`, {
+        headers: { host: "127.0.0.1:3000", origin: "http://127.0.0.1:3000" },
+      });
+      expect(proxy(local).headers.get("x-middleware-next")).toBe("1");
+      local.headers.set("origin", "null");
+      expect(proxy(local).status).toBe(403);
+      local.headers.set("host", "evil.example");
+      const rejected = proxy(local);
+      expect(rejected.status).toBe(400);
+      expect(await rejected.text()).toBe("Invalid Host header.");
+    },
+  );
   it("passes a request with the canonical host and no origin", async () => {
     const response = proxy(request());
     expect(response.status).toBe(200);

@@ -1,8 +1,14 @@
 # Ledger
 
 A local, single owner personal finance app. This repository currently
-contains the runnable scaffold: one status page that proves the browser to
-server to database path, with Postgres 18 running in Docker.
+contains the scaffold inside a shared app shell: a status page that proves
+the browser to server to database path, with Postgres 18 running in Docker.
+
+Routes: `/` redirects to `/status`, which shows the database check inside
+the shell (sidebar, navigation, health indicator, theme control). `/design`
+is a development only style reference and returns 404 in production. Light
+and dark themes follow the system setting by default; the Theme control in
+the sidebar footer overrides it.
 
 ## Requirements
 
@@ -54,8 +60,9 @@ Pinned toolchain (all versions exact, chosen per spec 0001):
    pnpm dev
    ```
 
-   Open http://127.0.0.1:3000. The page reports database status and the
-   time of the last check; "Check again" runs a fresh check.
+   Open http://127.0.0.1:3000. It redirects to `/status`, which reports
+   database status and the time of the last check; "Check again" runs a
+   fresh check. `/design` shows the design token and primitive reference.
 
 4. Production check:
 
@@ -69,7 +76,8 @@ Pinned toolchain (all versions exact, chosen per spec 0001):
 - `pnpm build` / `pnpm start` production build and server
 - `pnpm typecheck` strict TypeScript check
 - `pnpm db:up` / `pnpm db:down` start and stop Postgres
-- `pnpm test` Vitest suite, `pnpm test:e2e` Playwright suite
+- `pnpm test` Vitest suite, `pnpm test:e2e` Playwright suite,
+  `pnpm test:e2e:design` the development suite for `/design`
 
 ## Financial data
 
