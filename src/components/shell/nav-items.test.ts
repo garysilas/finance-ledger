@@ -12,6 +12,12 @@ describe("navigation registry", () => {
       })),
     ).toEqual([
       {
+        href: "/spending",
+        label: "Spending",
+        group: "primary",
+        match: "prefix",
+      },
+      {
         href: "/status",
         label: "System status",
         group: "system",

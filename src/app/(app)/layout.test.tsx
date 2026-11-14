@@ -8,6 +8,11 @@ const cookieValue = vi.hoisted(() => vi.fn());
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: cookieValue }),
 }));
+vi.mock("server-only", () => ({}));
+vi.mock("@/server/session", () => ({
+  SESSION_COOKIE_NAME: "ledger_session",
+}));
+vi.mock("./actions", () => ({ signOut: vi.fn() }));
 // The shell chrome is covered by its own tests; keep the real ui Sidebar so
 // the cookie driven defaultOpen still lands on data-state.
 vi.mock("@/components/shell/app-sidebar", () => ({

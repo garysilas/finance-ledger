@@ -32,6 +32,9 @@ export type MutationOutcome<T> = {
   value: T;
   targetId: string | null;
   resultingRevision: bigint | null;
+  // Overrides the caller supplied owner when the work resolves a
+  // different existing owner row (singleton reconciliation).
+  ownerId?: string;
   counts: OperationCounts;
   correctionConflicts?: CorrectionConflict[];
   committedCursor?: string | null;
@@ -106,6 +109,7 @@ export async function runMutation<T>(args: {
     }
 
     const applied = await args.work(db);
+    const receiptOwnerId = applied.ownerId ?? args.ownerId;
 
     const receiptId = randomUUID();
     await db.query(
@@ -116,7 +120,7 @@ export async function runMutation<T>(args: {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         receiptId,
-        args.ownerId,
+        receiptOwnerId,
         args.operation,
         args.requestId,
         digest,
@@ -144,7 +148,7 @@ export async function runMutation<T>(args: {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [
           randomUUID(),
-          args.ownerId,
+          receiptOwnerId,
           receiptId,
           args.actorType,
           args.operation,

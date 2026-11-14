@@ -35,6 +35,23 @@ describe("NavMenu", () => {
     expect(link).toHaveAttribute("href", "/status");
     if (current) expect(link).toHaveAttribute("aria-current", "page");
     else expect(link).not.toHaveAttribute("aria-current");
-    expect(nav.getAllByRole("link")).toHaveLength(1);
+    expect(nav.getAllByRole("link")).toHaveLength(2);
+  });
+
+  it.each([
+    ["/spending", true],
+    ["/status", false],
+  ])("marks Spending current at %s", (path, current) => {
+    pathname.mockReturnValue(path);
+    render(
+      <SidebarProvider persist={false}>
+        <NavMenu />
+      </SidebarProvider>,
+    );
+    const nav = within(screen.getByRole("navigation", { name: "Main" }));
+    const link = nav.getByRole("link", { name: "Spending" });
+    expect(link).toHaveAttribute("href", "/spending");
+    if (current) expect(link).toHaveAttribute("aria-current", "page");
+    else expect(link).not.toHaveAttribute("aria-current");
   });
 });

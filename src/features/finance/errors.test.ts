@@ -5,11 +5,17 @@ import { FAILURE_CODES, failure, ok } from "./errors";
 // covers: shared failure contract, retry guidance flags only transient codes
 describe("failure results", () => {
   it("marks transient database failures retryable and domain failures not", () => {
-    for (const code of ["DB_UNAVAILABLE", "DB_TIMEOUT", "COMMIT_UNKNOWN"]) {
+    const retryable = [
+      "DB_UNAVAILABLE",
+      "DB_TIMEOUT",
+      "COMMIT_UNKNOWN",
+      "PROVIDER_UNAVAILABLE",
+    ];
+    for (const code of retryable) {
       expect(failure(code as never).retryable).toBe(true);
     }
     for (const code of FAILURE_CODES) {
-      if (["DB_UNAVAILABLE", "DB_TIMEOUT", "COMMIT_UNKNOWN"].includes(code)) {
+      if (retryable.includes(code)) {
         continue;
       }
       expect(failure(code).retryable).toBe(false);

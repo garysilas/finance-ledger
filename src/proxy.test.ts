@@ -14,7 +14,11 @@ describe("proxy", () => {
     "AC-4 enforces request boundaries at %s",
     async (path) => {
       const local = new NextRequest(`http://127.0.0.1:3000${path}`, {
-        headers: { host: "127.0.0.1:3000", origin: "http://127.0.0.1:3000" },
+        headers: {
+          host: "127.0.0.1:3000",
+          origin: "http://127.0.0.1:3000",
+          cookie: "ledger_session=test-token",
+        },
       });
       expect(proxy(local).headers.get("x-middleware-next")).toBe("1");
       local.headers.set("origin", "null");
@@ -26,15 +30,56 @@ describe("proxy", () => {
     },
   );
   it("passes a request with the canonical host and no origin", async () => {
-    const response = proxy(request());
+    const response = proxy(request({ cookie: "ledger_session=test-token" }));
     expect(response.status).toBe(200);
     expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 
   it("passes a request whose origin is the canonical origin", () => {
-    const response = proxy(request({ origin: "http://127.0.0.1:3000" }));
+    const response = proxy(
+      request({
+        origin: "http://127.0.0.1:3000",
+        cookie: "ledger_session=test-token",
+      }),
+    );
     expect(response.status).toBe(200);
   });
+
+  it.each(["/", "/spending", "/spending?month=2031-01"])(
+    "redirects an unsigned request for %s to sign in",
+    (path) => {
+      const response = proxy(
+        new NextRequest(`http://127.0.0.1:3000${path}`, {
+          headers: { host: "127.0.0.1:3000" },
+        }),
+      );
+      expect(response.status).toBe(307);
+      const location = new URL(response.headers.get("location") ?? "");
+      expect(location.pathname).toBe("/signin");
+    },
+  );
+
+  it("keeps the unsigned destination in the return parameter", () => {
+    const response = proxy(
+      new NextRequest("http://127.0.0.1:3000/spending?month=2031-01", {
+        headers: { host: "127.0.0.1:3000" },
+      }),
+    );
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.searchParams.get("return")).toBe("/spending?month=2031-01");
+  });
+
+  it.each(["/signin", "/status", "/design"])(
+    "passes the public path %s without a cookie",
+    (path) => {
+      const response = proxy(
+        new NextRequest(`http://127.0.0.1:3000${path}`, {
+          headers: { host: "127.0.0.1:3000" },
+        }),
+      );
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+    },
+  );
 
   it.each([
     ["a different host", "localhost:3000"],

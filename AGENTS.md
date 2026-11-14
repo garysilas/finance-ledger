@@ -29,13 +29,14 @@ Tracer Bullet (prove a thin working path through storage, server, and UI, then d
 7. `pnpm db:generate` writes a Drizzle Kit migration and `pnpm db:migrate` applies migrations. `pnpm db:provision-migration-role` and `pnpm db:create-token-key` set up the migration role and the token key file.
 8. `pnpm db:test:up` and `pnpm db:test:down` manage the disposable test Postgres in `docker-compose.test.yml` for the `test/foundation.*` suites.
 9. `pnpm test:e2e:design` runs the design review suite through `playwright.design.config.ts`.
+10. `pnpm auth:set-password` sets the owner password hash from `LEDGER_OWNER_PASSWORD` or a hidden prompt; `--reset` replaces an existing password.
 
 ## Rules
 
 1. Keep routes and layouts in `src/app/`, shared presentation in `src/components/`, and private settings and database access in `src/server/`. Add `src/features/<feature>/` for domain rules and services only when needed.
 2. Use the `@/*` import alias for `src/*`. Follow the existing TypeScript style, two space indentation, double quotes, semicolons, and named exports outside framework entry points.
 3. Server modules import `server-only`. Client components must not import private settings or database clients. Return narrow display values, never raw errors or connection objects.
-4. Keep browser access at `http://127.0.0.1:3000` and Postgres at `127.0.0.1:5432`. Host and Origin checks are not owner authentication. The app still has no sign in and no live financial data; the finance schema and services exist but no provider integration feeds them yet.
+4. Keep browser access at `http://127.0.0.1:3000` and Postgres at `127.0.0.1:5432`. Host and Origin checks are not owner authentication. The owner signs in at `/signin`; `src/proxy.ts` redirects unsigned requests and `requireSession` is the authoritative check in every protected page and action. Plaid credentials (`PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV=sandbox`) live only in `.env.local` and are needed only when connecting or syncing.
 5. Keep `.env.local` private and ignored. Never log secrets or financial payloads. Never open network bindings, disable database authentication, or delete the data volume to fix a failure.
 6. Keep the status check dynamic and uncached. A production build must work without live database credentials or a running database.
 7. Place Vitest tests beside source as `*.test.ts` or `*.test.tsx`. Node is the default environment. UI tests select jsdom and use React Testing Library. Server tests mock `server-only`. Use controlled timers for timeout tests and restore mocks and timers.
@@ -47,6 +48,8 @@ Tracer Bullet (prove a thin working path through storage, server, and UI, then d
 
 Declined: optional Prettier skills and MCP integration, as recorded in spec 0002.
 Declined: shadcn/ui, Drizzle Kit, Playwright, and axe agent skills, plus shadcn, Drizzle Kit, and Playwright MCP servers (offered after feature 4).
+- [plaid-fintech](.agents/skills/plaid-fintech/): `sickn33/agentic-awesome-skills`, Plaid integration patterns (Link token flows, transactions sync, webhooks, compliance).
+MCP servers: `mcp-server-plaid` (recommended, official Plaid local sandbox server; not yet connected).
 
 ## Specs
 

@@ -29,7 +29,7 @@ Preferred stack is an owner proposal, not a scope decision: Next.js App Router, 
 | 2   | Coding standards and tooling       | Foundation | done        |
 | 3   | Financial data foundation          | Foundation | done        |
 | 4   | Design system and app shell        | Foundation | done        |
-| 5   | Owner to first spending view       | Slice 1    | planned     |
+| 5   | Owner to first spending view       | Slice 1    | done        |
 | 6   | Reliable sync and account overview | Slice 2    | planned     |
 | 7   | Spending investigation             | Slice 3    | planned     |
 | 8   | Monthly category budgets           | Slice 4    | planned     |
@@ -114,13 +114,24 @@ Set a cohesive visual language and navigation for spending, budgets, accounts, a
 
 ## Slice 1: Prove the real spending path
 
-### 5. Owner to first spending view · planned · needs a decision
+### 5. Owner to first spending view · done
 
 Make the first real thread work: owner sign in, connect one Sandbox institution, persist accounts and an initial transaction page, then show actual stored spending. This is the walking skeleton, not a disposable demo.
 
 **Done when:** only the owner can reach protected UI and server actions; one Sandbox connection survives restart; stored balances and posted transactions render correctly; tokens remain server side and encrypted; initial sync uses the cursor path without pretending incomplete history is complete.
 
-- [ ] Design it (spec): `/architect owner to first spending view`
+**Spec:** [0005](../specs/0005-owner-first-spending-view/index.md), content confirmed after cross check resolutions.
+
+**Code:** `src/server/password.ts`, `src/server/session.ts`, `src/server/plaid.ts`, `src/app/signin/`, `src/app/(app)/spending/`, `scripts/set-password.mjs`, `db/migrations/0002_familiar_tombstone.sql`
+
+- [x] Design it (spec): `/architect owner to first spending view`
+- [x] Build it: `/develop owner to first spending view`
+  1. Prove the auth thread: migration, password script, sessions, route and action guards, authenticated `/spending` shell (AC-1, AC-2, AC-8).
+  2. Build the Plaid connect flow: settings, adapter, link token, exchange, encrypted connection (AC-3, AC-7).
+  3. Land the initial sync: category mapping, exact normalization, one page import, freshness and history flag (AC-4, AC-6, AC-8).
+  4. Complete the spending view: month navigation, totals, balances, states (AC-5).
+- [x] Verify it: `/check verify owner to first spending view`
+- [x] Test it: `/test owner to first spending view`
 
 ## Slice 2: Trust the connected data
 

@@ -6,6 +6,7 @@ export const FAILURE_CODES = [
   "INVALID_TRANSITION",
   "CONFIG_INVALID",
   "KEY_UNAVAILABLE",
+  "PROVIDER_UNAVAILABLE",
   "TOKEN_UNREADABLE",
   "DB_UNAVAILABLE",
   "DB_TIMEOUT",
@@ -19,6 +20,7 @@ const RETRYABLE: ReadonlySet<FailureCode> = new Set([
   "DB_UNAVAILABLE",
   "DB_TIMEOUT",
   "COMMIT_UNKNOWN",
+  "PROVIDER_UNAVAILABLE",
 ]);
 
 export type ServiceFailure = {
