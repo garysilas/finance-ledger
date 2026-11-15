@@ -11,7 +11,7 @@ import type { FailureCode } from "@/features/finance/errors";
 import { uuid } from "@/features/finance/service";
 import { validateEnv } from "@/server/env";
 import {
-  importInitialSyncPage,
+  drainConnectionSync,
   plaidCreateLinkToken,
   plaidExchangePublicToken,
   plaidLookupInstitution,
@@ -70,7 +70,7 @@ export type CompleteResult =
 const publicTokenSchema = z.string().min(1).max(1024);
 
 // Exchange, encrypted connection, institution lookup done earlier (the
-// institution call needs the access token), then one sync page. Each
+// institution call needs the access token), then the sync drain. Each
 // stage that commits stays committed; a failure reports where to resume.
 // A public token is single use, so failures before the connection commits
 // can only be retried by reopening Link.
@@ -131,7 +131,7 @@ export async function completeConnectionAction(
     connectionId = existing.value.connectionId;
   }
 
-  const sync = await importInitialSyncPage(context.databaseUrl, {
+  const sync = await drainConnectionSync(context.databaseUrl, {
     ownerId: context.ownerId,
     connectionId,
   });
@@ -159,7 +159,7 @@ export async function retryInitialSyncAction(
   if (!parsed.success) {
     return { ok: false, code: "INVALID_INPUT" };
   }
-  const sync = await importInitialSyncPage(context.databaseUrl, {
+  const sync = await drainConnectionSync(context.databaseUrl, {
     ownerId: context.ownerId,
     connectionId: parsed.data,
   });

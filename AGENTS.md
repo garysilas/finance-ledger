@@ -48,8 +48,9 @@ Tracer Bullet (prove a thin working path through storage, server, and UI, then d
 
 Declined: optional Prettier skills and MCP integration, as recorded in spec 0002.
 Declined: shadcn/ui, Drizzle Kit, Playwright, and axe agent skills, plus shadcn, Drizzle Kit, and Playwright MCP servers (offered after feature 4).
+
 - [plaid-fintech](.agents/skills/plaid-fintech/): `sickn33/agentic-awesome-skills`, Plaid integration patterns (Link token flows, transactions sync, webhooks, compliance).
-MCP servers: `mcp-server-plaid` (recommended, official Plaid local sandbox server; not yet connected).
+  MCP servers: `mcp-server-plaid` (recommended, official Plaid local sandbox server; not yet connected).
 
 ## Specs
 

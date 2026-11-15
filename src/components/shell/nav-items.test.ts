@@ -18,6 +18,12 @@ describe("navigation registry", () => {
         match: "prefix",
       },
       {
+        href: "/accounts",
+        label: "Accounts",
+        group: "primary",
+        match: "prefix",
+      },
+      {
         href: "/status",
         label: "System status",
         group: "system",

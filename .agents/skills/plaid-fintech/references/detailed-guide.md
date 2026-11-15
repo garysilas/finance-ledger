@@ -16,54 +16,55 @@ may need updating when users change passwords.
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 
 const configuration = new Configuration({
-  basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
-  baseOptions: {
-    headers: {
-      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
-      'PLAID-SECRET': process.env.PLAID_SECRET,
-    },
-  },
+basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
+baseOptions: {
+headers: {
+'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
+'PLAID-SECRET': process.env.PLAID_SECRET,
+},
+},
 });
 
 const plaidClient = new PlaidApi(configuration);
 
 // Create link token for new user
 app.post('/api/plaid/create-link-token', async (req, res) => {
-  const userId = req.user.id; // authenticated server-side session; never trust body userId
+const userId = req.user.id; // authenticated server-side session; never trust body userId
 
-  try {
-    const response = await plaidClient.linkTokenCreate({
-      user: {
-        client_user_id: userId,  // Your internal user ID
-      },
-      client_name: 'My Finance App',
-      products: [Products.Transactions],
-      country_codes: [CountryCode.Us],
-      language: 'en',
-      webhook: 'https://yourapp.com/api/plaid/webhooks',
-      // Request 180 days for recurring transactions
-      transactions: {
-        days_requested: 180,
-      },
-    });
+try {
+const response = await plaidClient.linkTokenCreate({
+user: {
+client_user_id: userId, // Your internal user ID
+},
+client_name: 'My Finance App',
+products: [Products.Transactions],
+country_codes: [CountryCode.Us],
+language: 'en',
+webhook: 'https://yourapp.com/api/plaid/webhooks',
+// Request 180 days for recurring transactions
+transactions: {
+days_requested: 180,
+},
+});
 
     res.json({ link_token: response.data.link_token });
-  } catch (error) {
-    console.error('Link token creation failed');
-    res.status(500).json({ error: 'Failed to create link token' });
-  }
+
+} catch (error) {
+console.error('Link token creation failed');
+res.status(500).json({ error: 'Failed to create link token' });
+}
 });
 
 // Exchange public token for access token
 app.post('/api/plaid/exchange-token', async (req, res) => {
-  const { publicToken } = req.body;
-  const userId = req.user.id; // authenticated server-side session
+const { publicToken } = req.body;
+const userId = req.user.id; // authenticated server-side session
 
-  try {
-    // Exchange for permanent access token
-    const exchangeResponse = await plaidClient.itemPublicTokenExchange({
-      public_token: publicToken,
-    });
+try {
+// Exchange for permanent access token
+const exchangeResponse = await plaidClient.itemPublicTokenExchange({
+public_token: publicToken,
+});
 
     const { access_token, item_id } = exchangeResponse.data;
 
@@ -82,53 +83,54 @@ app.post('/api/plaid/exchange-token', async (req, res) => {
     await initiateTransactionSync(item_id, access_token);
 
     res.json({ success: true, itemId: item_id });
-  } catch (error) {
-    console.error('Token exchange failed');
-    res.status(500).json({ error: 'Failed to exchange token' });
-  }
+
+} catch (error) {
+console.error('Token exchange failed');
+res.status(500).json({ error: 'Failed to exchange token' });
+}
 });
 
 // Frontend - React component
 import { usePlaidLink } from 'react-plaid-link';
 
 function BankLinkButton({ userId }: { userId: string }) {
-  const [linkToken, setLinkToken] = useState<string | null>(null);
+const [linkToken, setLinkToken] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function createLinkToken() {
-      const response = await fetch('/api/plaid/create-link-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-      const { link_token } = await response.json();
-      setLinkToken(link_token);
-    }
-    createLinkToken();
-  }, [userId]);
+useEffect(() => {
+async function createLinkToken() {
+const response = await fetch('/api/plaid/create-link-token', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ userId }),
+});
+const { link_token } = await response.json();
+setLinkToken(link_token);
+}
+createLinkToken();
+}, [userId]);
 
-  const { open, ready } = usePlaidLink({
-    token: linkToken,
-    onSuccess: async (publicToken, metadata) => {
-      // Exchange public token for access token
-      await fetch('/api/plaid/exchange-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ publicToken, userId }),
-      });
-    },
-    onExit: (error, metadata) => {
-      if (error) {
-        console.error('Link exit error:', error);
-      }
-    },
-  });
+const { open, ready } = usePlaidLink({
+token: linkToken,
+onSuccess: async (publicToken, metadata) => {
+// Exchange public token for access token
+await fetch('/api/plaid/exchange-token', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ publicToken, userId }),
+});
+},
+onExit: (error, metadata) => {
+if (error) {
+console.error('Link exit error:', error);
+}
+},
+});
 
-  return (
-    <button onClick={() => open()} disabled={!ready}>
-      Connect Bank Account
-    </button>
-  );
+return (
+<button onClick={() => open()} disabled={!ready}>
+Connect Bank Account
+</button>
+);
 }
 
 ### Context
@@ -145,34 +147,34 @@ polling.
 
 // Transactions sync service
 interface TransactionSyncState {
-  cursor: string | null;
-  hasMore: boolean;
+cursor: string | null;
+hasMore: boolean;
 }
 
 async function syncTransactions(
-  accessToken: string,
-  itemId: string
+accessToken: string,
+itemId: string
 ): Promise<void> {
-  // Get last cursor from database
-  const item = await db.plaidItem.findUnique({
-    where: { itemId },
-  });
+// Get last cursor from database
+const item = await db.plaidItem.findUnique({
+where: { itemId },
+});
 
-  if (!item) throw new Error('Item not found');
-  const initialCursor = item.transactionsCursor || null;
-  let cursor = initialCursor;
-  let hasMore = true;
-  let addedCount = 0;
-  let modifiedCount = 0;
-  let removedCount = 0;
+if (!item) throw new Error('Item not found');
+const initialCursor = item.transactionsCursor || null;
+let cursor = initialCursor;
+let hasMore = true;
+let addedCount = 0;
+let modifiedCount = 0;
+let removedCount = 0;
 
-  while (hasMore) {
-    try {
-      const response = await plaidClient.transactionsSync({
-        access_token: accessToken,
-        cursor: cursor || undefined,
-        count: 500,  // Max per request
-      });
+while (hasMore) {
+try {
+const response = await plaidClient.transactionsSync({
+access_token: accessToken,
+cursor: cursor || undefined,
+count: 500, // Max per request
+});
 
       const { added, modified, removed, next_cursor, has_more } = response.data;
 
@@ -192,44 +194,45 @@ async function syncTransactions(
       }
       throw error;
     }
-  }
 
-  // Save cursor for next sync
-  await db.plaidItem.update({
-    where: { itemId },
-    data: { transactionsCursor: cursor },
-  });
+}
 
-  console.log(`Sync complete: +${addedCount} ~${modifiedCount} -${removedCount}`);
+// Save cursor for next sync
+await db.plaidItem.update({
+where: { itemId },
+data: { transactionsCursor: cursor },
+});
+
+console.log(`Sync complete: +${addedCount} ~${modifiedCount} -${removedCount}`);
 }
 
 // Webhook handler for real-time updates
 app.post('/api/plaid/webhooks', async (req, res) => {
-  const { webhook_type, webhook_code, item_id } = req.body;
+const { webhook_type, webhook_code, item_id } = req.body;
 
-  // Verify webhook (see webhook verification pattern)
-  if (!await verifyPlaidWebhook(req)) {
-    return res.status(401).send('Invalid webhook');
-  }
+// Verify webhook (see webhook verification pattern)
+if (!await verifyPlaidWebhook(req)) {
+return res.status(401).send('Invalid webhook');
+}
 
-  if (webhook_type === 'TRANSACTIONS') {
-    switch (webhook_code) {
-      case 'SYNC_UPDATES_AVAILABLE':
-        // New transactions available, trigger sync
-        await queueTransactionSync(item_id);
-        break;
-      case 'INITIAL_UPDATE':
-        // Initial batch of transactions ready
-        await queueTransactionSync(item_id);
-        break;
-      case 'HISTORICAL_UPDATE':
-        // Historical transactions ready
-        await queueTransactionSync(item_id);
-        break;
-    }
-  }
+if (webhook_type === 'TRANSACTIONS') {
+switch (webhook_code) {
+case 'SYNC_UPDATES_AVAILABLE':
+// New transactions available, trigger sync
+await queueTransactionSync(item_id);
+break;
+case 'INITIAL_UPDATE':
+// Initial batch of transactions ready
+await queueTransactionSync(item_id);
+break;
+case 'HISTORICAL_UPDATE':
+// Historical transactions ready
+await queueTransactionSync(item_id);
+break;
+}
+}
 
-  res.sendStatus(200);
+res.sendStatus(200);
 });
 
 ### Context
@@ -245,54 +248,55 @@ Listen for PENDING_DISCONNECT webhook to proactively prompt users.
 
 // Create link token for update mode
 app.post('/api/plaid/create-update-token', async (req, res) => {
-  const { itemId } = req.body;
+const { itemId } = req.body;
 
-  const item = await db.plaidItem.findUnique({
-    where: { itemId },
-    include: { user: true },
-  });
+const item = await db.plaidItem.findUnique({
+where: { itemId },
+include: { user: true },
+});
 
-  if (!item || item.userId !== req.user.id) {
-    return res.status(404).json({ error: 'Item not found' });
-  }
+if (!item || item.userId !== req.user.id) {
+return res.status(404).json({ error: 'Item not found' });
+}
 
-  try {
-    const response = await plaidClient.linkTokenCreate({
-      user: {
-        client_user_id: item.userId,
-      },
-      client_name: 'My Finance App',
-      country_codes: [CountryCode.Us],
-      language: 'en',
-      webhook: 'https://yourapp.com/api/plaid/webhooks',
-      // Update mode: provide access_token instead of products
-      access_token: await decrypt(item.accessToken),
-    });
+try {
+const response = await plaidClient.linkTokenCreate({
+user: {
+client_user_id: item.userId,
+},
+client_name: 'My Finance App',
+country_codes: [CountryCode.Us],
+language: 'en',
+webhook: 'https://yourapp.com/api/plaid/webhooks',
+// Update mode: provide access_token instead of products
+access_token: await decrypt(item.accessToken),
+});
 
     res.json({ link_token: response.data.link_token });
-  } catch (error) {
-    console.error('Update token creation failed');
-    res.status(500).json({ error: 'Failed to create update token' });
-  }
+
+} catch (error) {
+console.error('Update token creation failed');
+res.status(500).json({ error: 'Failed to create update token' });
+}
 });
 
 // Handle item errors from webhooks
 app.post('/api/plaid/webhooks', async (req, res) => {
-  if (!await verifyPlaidWebhook(req)) return res.status(401).send('Invalid webhook');
-  const { webhook_type, webhook_code, item_id, error } = req.body;
+if (!await verifyPlaidWebhook(req)) return res.status(401).send('Invalid webhook');
+const { webhook_type, webhook_code, item_id, error } = req.body;
 
-  if (webhook_type === 'ITEM') {
-    switch (webhook_code) {
-      case 'ERROR':
-        // Item has entered an error state
-        await db.plaidItem.update({
-          where: { itemId: item_id },
-          data: {
-            status: 'ERROR',
-            errorCode: error?.error_code,
-            errorMessage: error?.error_message,
-          },
-        });
+if (webhook_type === 'ITEM') {
+switch (webhook_code) {
+case 'ERROR':
+// Item has entered an error state
+await db.plaidItem.update({
+where: { itemId: item_id },
+data: {
+status: 'ERROR',
+errorCode: error?.error_code,
+errorMessage: error?.error_message,
+},
+});
 
         // Notify user to reconnect
         if (error?.error_code === 'ITEM_LOGIN_REQUIRED') {
@@ -324,26 +328,27 @@ app.post('/api/plaid/webhooks', async (req, res) => {
         });
         break;
     }
-  }
 
-  res.sendStatus(200);
+}
+
+res.sendStatus(200);
 });
 
 // Check item status before API calls
 async function getItemWithValidation(itemId: string) {
-  const item = await db.plaidItem.findUnique({
-    where: { itemId },
-  });
+const item = await db.plaidItem.findUnique({
+where: { itemId },
+});
 
-  if (!item) {
-    throw new Error('Item not found');
-  }
+if (!item) {
+throw new Error('Item not found');
+}
 
-  if (item.status !== 'ACTIVE') {
-    throw new ItemNeedsUpdateError(item.errorCode, item.errorMessage);
-  }
+if (item.status !== 'ACTIVE') {
+throw new ItemNeedsUpdateError(item.errorCode, item.errorMessage);
+}
 
-  return item;
+return item;
 }
 
 ### Context
@@ -360,17 +365,17 @@ transfers.
 
 // Get account and routing numbers
 async function getACHNumbers(accessToken: string): Promise<ACHInfo[]> {
-  const response = await plaidClient.authGet({
-    access_token: accessToken,
-  });
+const response = await plaidClient.authGet({
+access_token: accessToken,
+});
 
-  const { accounts, numbers } = response.data;
+const { accounts, numbers } = response.data;
 
-  // Map ACH numbers to accounts
-  return accounts.map(account => {
-    const achNumber = numbers.ach.find(
-      n => n.account_id === account.account_id
-    );
+// Map ACH numbers to accounts
+return accounts.map(account => {
+const achNumber = numbers.ach.find(
+n => n.account_id === account.account_id
+);
 
     return {
       accountId: account.account_id,
@@ -382,7 +387,8 @@ async function getACHNumbers(accessToken: string): Promise<ACHInfo[]> {
       account: achNumber?.account,
       wireRouting: achNumber?.wire_routing,
     };
-  });
+
+});
 }
 
 // Money movement intentionally not implemented: identity-match scores and a balance snapshot
@@ -403,82 +409,82 @@ Use /accounts/balance/get for real-time balance (paid endpoint).
 real-time decisions.
 
 interface BalanceInfo {
-  accountId: string;
-  available: number | null;
-  current: number | null;
-  limit: number | null;
-  isoCurrencyCode: string | null;
-  lastUpdated: Date | null;
-  isRealtime: boolean;
+accountId: string;
+available: number | null;
+current: number | null;
+limit: number | null;
+isoCurrencyCode: string | null;
+lastUpdated: Date | null;
+isRealtime: boolean;
 }
 
 // Get cached balance (free, suitable for display)
 async function getCachedBalances(accessToken: string): Promise<BalanceInfo[]> {
-  const response = await plaidClient.accountsGet({
-    access_token: accessToken,
-  });
+const response = await plaidClient.accountsGet({
+access_token: accessToken,
+});
 
-  return response.data.accounts.map(account => ({
-    accountId: account.account_id,
-    available: account.balances.available,
-    current: account.balances.current,
-    limit: account.balances.limit,
-    isoCurrencyCode: account.balances.iso_currency_code ?? null,
-    lastUpdated: account.balances.last_updated_datetime ? new Date(account.balances.last_updated_datetime) : null,
-    isRealtime: false,
-  }));
+return response.data.accounts.map(account => ({
+accountId: account.account_id,
+available: account.balances.available,
+current: account.balances.current,
+limit: account.balances.limit,
+isoCurrencyCode: account.balances.iso_currency_code ?? null,
+lastUpdated: account.balances.last_updated_datetime ? new Date(account.balances.last_updated_datetime) : null,
+isRealtime: false,
+}));
 }
 
 // Get real-time balance (paid, for payment validation)
 async function getRealTimeBalance(
-  accessToken: string,
-  accountIds?: string[]
+accessToken: string,
+accountIds?: string[]
 ): Promise<BalanceInfo[]> {
-  const response = await plaidClient.accountsBalanceGet({
-    access_token: accessToken,
-    options: accountIds ? { account_ids: accountIds } : undefined,
-  });
+const response = await plaidClient.accountsBalanceGet({
+access_token: accessToken,
+options: accountIds ? { account_ids: accountIds } : undefined,
+});
 
-  return response.data.accounts.map(account => ({
-    accountId: account.account_id,
-    available: account.balances.available,
-    current: account.balances.current,
-    limit: account.balances.limit,
-    isoCurrencyCode: account.balances.iso_currency_code ?? null,
-    lastUpdated: account.balances.last_updated_datetime ? new Date(account.balances.last_updated_datetime) : null,
-    isRealtime: true,
-  }));
+return response.data.accounts.map(account => ({
+accountId: account.account_id,
+available: account.balances.available,
+current: account.balances.current,
+limit: account.balances.limit,
+isoCurrencyCode: account.balances.iso_currency_code ?? null,
+lastUpdated: account.balances.last_updated_datetime ? new Date(account.balances.last_updated_datetime) : null,
+isRealtime: true,
+}));
 }
 
 // Payment validation with balance check
 async function validatePayment(
-  accessToken: string,
-  accountId: string,
-  amount: number
+accessToken: string,
+accountId: string,
+amount: number
 ): Promise<PaymentValidation> {
-  const balances = await getRealTimeBalance(accessToken, [accountId]);
-  const account = balances.find(b => b.accountId === accountId);
+const balances = await getRealTimeBalance(accessToken, [accountId]);
+const account = balances.find(b => b.accountId === accountId);
 
-  if (!account) {
-    return { valid: false, reason: 'Account not found' };
-  }
+if (!account) {
+return { valid: false, reason: 'Account not found' };
+}
 
-  const available = account.available ?? account.current;
+const available = account.available ?? account.current;
 
-  if (!Number.isFinite(amount) || amount <= 0 || available === null || available < amount) {
-    return {
-      valid: false,
-      reason: 'Insufficient funds',
-      available,
-      requested: amount,
-    };
-  }
+if (!Number.isFinite(amount) || amount <= 0 || available === null || available < amount) {
+return {
+valid: false,
+reason: 'Insufficient funds',
+available,
+requested: amount,
+};
+}
 
-  return {
-    valid: true,
-    available,
-    requested: amount,
-  };
+return {
+valid: true,
+available,
+requested: amount,
+};
 }
 
 ### Context
@@ -507,7 +513,6 @@ The catalog does not bundle this verifier/queue implementation. Keep the route d
 - webhook security
 - event processing
 - production deployment
-
 
 ## Sharp Edges
 
@@ -542,7 +547,6 @@ Severity: MEDIUM
 ### Recurring Transactions Need 180+ Days of History
 
 Severity: MEDIUM
-
 
 ## Validation Checks
 
@@ -625,7 +629,6 @@ Severity: WARNING
 Store cursor for incremental syncs
 
 Message: Transaction sync without cursor persistence. Store cursor for incremental sync.
-
 
 ## Collaboration
 

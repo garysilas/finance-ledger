@@ -25,9 +25,14 @@ import { parseMoneyToUnits } from "@/features/finance/money";
 import { applyProviderBatch } from "@/features/finance/batch-service";
 import {
   decryptConnectionToken,
-  getConnectionSyncState,
-  markSyncSuccess,
+  decryptReconnectToken,
 } from "@/features/finance/connection-service";
+import {
+  claimSyncRun,
+  failSyncRun,
+  finishSyncRun,
+  markNeedsReconnect,
+} from "@/features/finance/sync-state-service";
 
 // The trusted provider adapter. It is the only module allowed to call
 // decryptConnectionToken and getConnectionSyncState; plaintext access
@@ -38,9 +43,14 @@ const plaidSettings = z.object({
   PLAID_CLIENT_ID: z.string().min(1),
   PLAID_SECRET: z.string().min(1),
   PLAID_ENV: z.literal("sandbox"),
+  PLAID_WEBHOOK_URL: z.string().url().optional(),
 });
 
-type PlaidConfig = { clientId: string; secret: string };
+type PlaidConfig = {
+  clientId: string;
+  secret: string;
+  webhookUrl: string | null;
+};
 
 // Lazy validation, same contract as loadTokenKey: Plaid actions fail
 // closed on missing or wrong settings while builds and reads never need
@@ -52,6 +62,7 @@ export function loadPlaidSettings(
     PLAID_CLIENT_ID: source.PLAID_CLIENT_ID,
     PLAID_SECRET: source.PLAID_SECRET,
     PLAID_ENV: source.PLAID_ENV,
+    PLAID_WEBHOOK_URL: source.PLAID_WEBHOOK_URL,
   });
   if (!parsed.success) {
     return failure("CONFIG_INVALID");
@@ -59,6 +70,7 @@ export function loadPlaidSettings(
   return ok({
     clientId: parsed.data.PLAID_CLIENT_ID,
     secret: parsed.data.PLAID_SECRET,
+    webhookUrl: parsed.data.PLAID_WEBHOOK_URL ?? null,
   });
 }
 
@@ -97,6 +109,9 @@ export async function plaidCreateLinkToken(
       country_codes: [CountryCode.Us],
       user: { client_user_id: ownerId },
       products: [Products.Transactions],
+      ...(settings.value.webhookUrl !== null
+        ? { webhook: settings.value.webhookUrl }
+        : {}),
     });
     return ok(response.data.link_token);
   } catch {
@@ -276,6 +291,21 @@ export function normalizeSyncPage(
   }
 }
 
+// Item errors that mean the owner must reconnect through Link update
+// mode. Anything else from the provider is treated as transient.
+const ITEM_ERROR_CODES = new Set([
+  "ITEM_LOGIN_REQUIRED",
+  "ITEM_EXPIRED",
+  "NO_ACCOUNTS",
+  "ITEM_LOCKED",
+]);
+
+function plaidErrorCode(error: unknown): string | null {
+  const code = (error as { response?: { data?: { error_code?: string } } })
+    ?.response?.data?.error_code;
+  return typeof code === "string" ? code : null;
+}
+
 async function plaidTransactionsSync(
   accessToken: string,
   cursor: string | null,
@@ -290,64 +320,280 @@ async function plaidTransactionsSync(
       cursor: cursor ?? "",
     });
     return ok(response.data);
+  } catch (error) {
+    const code = plaidErrorCode(error);
+    if (code !== null && ITEM_ERROR_CODES.has(code)) {
+      return failure("NEEDS_RECONNECT");
+    }
+    return failure("PROVIDER_UNAVAILABLE");
+  }
+}
+
+const RETRY_ATTEMPTS = 3;
+const RETRY_BASE_MS = 250;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Individual Plaid calls retry up to 3 attempts with a 250 ms base delay
+// doubling per attempt. Only PROVIDER_UNAVAILABLE retries; item errors
+// and validation failures are terminal.
+async function withRetry<T>(
+  call: () => Promise<ServiceResult<T>>,
+): Promise<ServiceResult<T>> {
+  let attempt = 0;
+  for (;;) {
+    const result = await call();
+    if (result.ok || result.code !== "PROVIDER_UNAVAILABLE") {
+      return result;
+    }
+    attempt += 1;
+    if (attempt >= RETRY_ATTEMPTS) {
+      return result;
+    }
+    await delay(RETRY_BASE_MS * 2 ** (attempt - 1));
+  }
+}
+
+export type DrainSyncOutcome = {
+  connectionId: string;
+  cursor: string;
+  pages: number;
+  counts: { inserted: number; updated: number; removed: number };
+};
+
+// Drain every /transactions/sync page for a connection. The claim makes
+// one runner per connection; each page commits atomically through
+// applyProviderBatch and the cursor advances only on commit, so a mid run
+// failure keeps committed pages and the next run resumes from them. A
+// finished drain sets history_complete: a non null cursor implies every
+// earlier page committed, so reaching the end means the whole chain is
+// stored regardless of where this run began.
+export async function drainConnectionSync(
+  databaseUrl: string,
+  input: { ownerId: string; connectionId: string },
+): Promise<ServiceResult<DrainSyncOutcome>> {
+  const claim = await claimSyncRun(databaseUrl, input);
+  if (!claim.ok) {
+    return claim;
+  }
+  const ref = { ownerId: input.ownerId, connectionId: input.connectionId };
+
+  const fail = async (code: FailureCode) => {
+    await failSyncRun(databaseUrl, { ...ref, code });
+    return failure(code);
+  };
+
+  const token = await decryptConnectionToken(databaseUrl, ref);
+  if (!token.ok) {
+    return fail(token.code);
+  }
+
+  // Existing connections adopt the configured webhook URL before the
+  // drain. A failure there never fails the sync.
+  const settings = loadPlaidSettings();
+  if (settings.ok && settings.value.webhookUrl !== null) {
+    await plaidItemWebhookUpdate(token.value, settings.value.webhookUrl);
+  }
+
+  let cursor = claim.value.cursor;
+  const counts = { inserted: 0, updated: 0, removed: 0 };
+  let pages = 0;
+
+  for (;;) {
+    const page = await withRetry(() =>
+      plaidTransactionsSync(token.value, cursor),
+    );
+    if (!page.ok) {
+      if (page.code === "NEEDS_RECONNECT") {
+        await markNeedsReconnect(databaseUrl, ref);
+        return failure("NEEDS_RECONNECT");
+      }
+      return fail(page.code);
+    }
+    const normalized = normalizeSyncPage(page.value);
+    if (!normalized.ok) {
+      return fail(normalized.code);
+    }
+    const batch = await applyProviderBatch(databaseUrl, {
+      ...ref,
+      expectedCursor: cursor,
+      nextCursor: normalized.value.nextCursor,
+      accountObservations: normalized.value.accountObservations,
+      transactionUpserts: normalized.value.transactionUpserts,
+      removalIds: normalized.value.removalIds,
+      requestId: randomUUID(),
+    });
+    if (!batch.ok) {
+      return fail(batch.code);
+    }
+    pages += 1;
+    counts.inserted += batch.value.counts.inserted;
+    counts.updated += batch.value.counts.updated;
+    counts.removed += batch.value.counts.removed;
+    cursor = normalized.value.nextCursor;
+    if (!page.value.has_more) {
+      break;
+    }
+  }
+
+  const finished = await finishSyncRun(databaseUrl, {
+    ...ref,
+    historyComplete: true,
+  });
+  if (!finished.ok) {
+    return finished;
+  }
+  return ok({
+    connectionId: input.connectionId,
+    cursor,
+    pages,
+    counts,
+  });
+}
+
+// Update mode Link token: bound to the item's existing access token, no
+// products argument, same webhook URL. The resulting public token is
+// never exchanged because update mode returns no new item.
+export async function plaidCreateUpdateLinkToken(
+  accessToken: string,
+  ownerId: string,
+): Promise<ServiceResult<string>> {
+  const settings = loadPlaidSettings();
+  if (!settings.ok) {
+    return settings;
+  }
+  try {
+    const response = await plaidClient(settings.value).linkTokenCreate({
+      client_name: "Ledger",
+      language: "en",
+      country_codes: [CountryCode.Us],
+      user: { client_user_id: ownerId },
+      access_token: accessToken,
+      ...(settings.value.webhookUrl !== null
+        ? { webhook: settings.value.webhookUrl }
+        : {}),
+    });
+    return ok(response.data.link_token);
   } catch {
     return failure("PROVIDER_UNAVAILABLE");
   }
 }
 
-export type InitialSyncOutcome = {
-  connectionId: string;
-  cursor: string;
-  counts: { inserted: number; updated: number; removed: number };
-};
+// The item's current error code, or null when the provider reports the
+// item healthy. Used after Link update mode before a connection may
+// return to active.
+export async function plaidItemError(
+  accessToken: string,
+): Promise<ServiceResult<string | null>> {
+  const settings = loadPlaidSettings();
+  if (!settings.ok) {
+    return settings;
+  }
+  try {
+    const response = await plaidClient(settings.value).itemGet({
+      access_token: accessToken,
+    });
+    return ok(response.data.item.error?.error_code ?? null);
+  } catch {
+    return failure("PROVIDER_UNAVAILABLE");
+  }
+}
 
-// Import exactly one /transactions/sync page through the foundation batch
-// service: read the live cursor, decrypt the token, fetch one page,
-// normalize, and commit. has_more is ignored; history_complete stays
-// false because one page never claims complete history.
-export async function importInitialSyncPage(
+// Update mode link token for a needs_reconnect connection: the token is
+// decrypted inside the adapter and bound to the existing item, so the
+// browser only ever sees the short lived link token.
+export async function plaidUpdateModeLinkToken(
   databaseUrl: string,
   input: { ownerId: string; connectionId: string },
-): Promise<ServiceResult<InitialSyncOutcome>> {
-  const syncState = await getConnectionSyncState(databaseUrl, input);
-  if (!syncState.ok) {
-    return syncState;
-  }
-  if (syncState.value.state !== "active") {
-    return failure("INVALID_TRANSITION");
-  }
-  const token = await decryptConnectionToken(databaseUrl, input);
+): Promise<ServiceResult<string>> {
+  const token = await decryptReconnectToken(databaseUrl, input);
   if (!token.ok) {
     return token;
   }
-  const page = await plaidTransactionsSync(token.value, syncState.value.cursor);
-  if (!page.ok) {
-    return page;
+  return plaidCreateUpdateLinkToken(token.value, input.ownerId);
+}
+
+// After Link update mode completes, confirm through /item/get that the
+// provider cleared the item error. Client reported success alone is
+// never trusted.
+export async function plaidConfirmItemHealthy(
+  databaseUrl: string,
+  input: { ownerId: string; connectionId: string },
+): Promise<ServiceResult<null>> {
+  const token = await decryptReconnectToken(databaseUrl, input);
+  if (!token.ok) {
+    return token;
   }
-  const normalized = normalizeSyncPage(page.value);
-  if (!normalized.ok) {
-    return normalized;
+  const itemError = await withRetry(() => plaidItemError(token.value));
+  if (!itemError.ok) {
+    return itemError;
   }
-  const batch = await applyProviderBatch(databaseUrl, {
-    ownerId: input.ownerId,
-    connectionId: input.connectionId,
-    expectedCursor: syncState.value.cursor,
-    nextCursor: normalized.value.nextCursor,
-    accountObservations: normalized.value.accountObservations,
-    transactionUpserts: normalized.value.transactionUpserts,
-    removalIds: normalized.value.removalIds,
-    requestId: randomUUID(),
-  });
-  if (!batch.ok) {
-    return batch;
+  if (itemError.value !== null) {
+    return failure("ITEM_STILL_ERROR");
   }
-  const marked = await markSyncSuccess(databaseUrl, input);
-  if (!marked.ok) {
-    return marked;
+  return ok(null);
+}
+
+// Repoint the item's webhook to the configured URL. Called before a drain
+// for connections created before webhook registration existed.
+export async function plaidItemWebhookUpdate(
+  accessToken: string,
+  webhookUrl: string,
+): Promise<ServiceResult<null>> {
+  const settings = loadPlaidSettings();
+  if (!settings.ok) {
+    return settings;
   }
-  return ok({
-    connectionId: input.connectionId,
-    cursor: normalized.value.nextCursor,
-    counts: batch.value.counts,
-  });
+  try {
+    await plaidClient(settings.value).itemWebhookUpdate({
+      access_token: accessToken,
+      webhook: webhookUrl,
+    });
+    return ok(null);
+  } catch {
+    return failure("PROVIDER_UNAVAILABLE");
+  }
+}
+
+// The JWK for a Plaid-Verification JWT kid, fetched through the
+// authenticated verification key endpoint. The route caches per kid and
+// refetches on verification failure.
+export async function plaidWebhookVerificationKey(
+  keyId: string,
+): Promise<ServiceResult<Record<string, unknown>>> {
+  const settings = loadPlaidSettings();
+  if (!settings.ok) {
+    return settings;
+  }
+  try {
+    const response = await plaidClient(
+      settings.value,
+    ).webhookVerificationKeyGet({ key_id: keyId });
+    return ok(response.data.key as unknown as Record<string, unknown>);
+  } catch {
+    return failure("PROVIDER_UNAVAILABLE");
+  }
+}
+
+// Ask the Plaid sandbox to fire a real signed webhook at the configured
+// URL. Exists for the safe local delivery path in spec 0006 tests.
+export async function plaidSandboxFireWebhook(
+  accessToken: string,
+  webhookCode: string,
+): Promise<ServiceResult<null>> {
+  const settings = loadPlaidSettings();
+  if (!settings.ok) {
+    return settings;
+  }
+  try {
+    await plaidClient(settings.value).sandboxItemFireWebhook({
+      access_token: accessToken,
+      webhook_code: webhookCode as never,
+    });
+    return ok(null);
+  } catch {
+    return failure("PROVIDER_UNAVAILABLE");
+  }
 }

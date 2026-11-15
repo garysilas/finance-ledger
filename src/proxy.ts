@@ -10,6 +10,14 @@ const SESSION_COOKIE = "ledger_session";
 const PUBLIC_PATHS = new Set(["/signin", "/status", "/design"]);
 
 export function proxy(request: NextRequest) {
+  // The webhook route carries its own authentication (the
+  // Plaid-Verification signature) and must stay reachable however the
+  // engineer exposes it during a Sandbox delivery test, so it sits
+  // outside the host, origin, and cookie checks.
+  if (request.nextUrl.pathname === "/api/webhooks/plaid") {
+    return NextResponse.next();
+  }
+
   const host = request.headers.get("host");
   if (host === null || host.includes(",") || host !== CANONICAL_HOST) {
     return new NextResponse("Invalid Host header.", {
