@@ -286,6 +286,46 @@ export async function setConnectionState(
   });
 }
 
+// Disconnect clears the token envelope and lands on the disconnected
+// state in one unit of work. Accounts and transactions stay stored.
+export async function disconnectConnection(
+  databaseUrl: string,
+  rawInput: unknown,
+): Promise<ServiceResult<null>> {
+  const parsed = z
+    .object({ ownerId: uuid, connectionId: uuid })
+    .strict()
+    .safeParse(rawInput);
+  if (!parsed.success) {
+    return failure("INVALID_INPUT");
+  }
+  const { ownerId, connectionId } = parsed.data;
+  return runUnitOfWork(databaseUrl, async (db) => {
+    const rows = await db.query(
+      `UPDATE ledger.connection
+       SET state = 'disconnected', sync_started_at = NULL,
+           token_version = NULL, token_key_id = NULL,
+           token_nonce = NULL, token_ciphertext = NULL, token_tag = NULL,
+           revision = revision + 1, updated_at = now()
+       WHERE id = $1 AND owner_id = $2
+         AND state IN ('active', 'needs_reconnect')
+       RETURNING id`,
+      [connectionId, ownerId],
+    );
+    if (rows.rows.length === 0) {
+      const found = await db.query<{ state: string }>(
+        `SELECT state FROM ledger.connection
+         WHERE id = $1 AND owner_id = $2`,
+        [connectionId, ownerId],
+      );
+      throw new OpFailure(
+        found.rows.length === 0 ? "NOT_FOUND" : "INVALID_TRANSITION",
+      );
+    }
+    return null;
+  });
+}
+
 export type ConnectionLookup = {
   connectionId: string;
   state: string;
@@ -324,6 +364,9 @@ export type OwnerConnectionSummary = {
   institutionName: string | null;
   historyComplete: boolean;
   lastSuccessfulSyncAt: string | null;
+  lastSyncAttemptAt: string | null;
+  lastSyncFailure: string | null;
+  syncStartedAt: string | null;
 };
 
 // Display safe connection rows for the owner scoped views. Carries no
@@ -344,9 +387,13 @@ export async function listOwnerConnections(
       institution_name: string | null;
       history_complete: boolean;
       last_successful_sync_at: Date | null;
+      last_sync_attempt_at: Date | null;
+      last_sync_failure: string | null;
+      sync_started_at: Date | null;
     }>(
       `SELECT id, state, institution_name, history_complete,
-              last_successful_sync_at
+              last_successful_sync_at, last_sync_attempt_at,
+              last_sync_failure, sync_started_at
        FROM ledger.connection WHERE owner_id = $1 ORDER BY id`,
       [ownerId],
     );
@@ -357,6 +404,13 @@ export async function listOwnerConnections(
       historyComplete: row.history_complete,
       lastSuccessfulSyncAt: row.last_successful_sync_at
         ? row.last_successful_sync_at.toISOString()
+        : null,
+      lastSyncAttemptAt: row.last_sync_attempt_at
+        ? row.last_sync_attempt_at.toISOString()
+        : null,
+      lastSyncFailure: row.last_sync_failure,
+      syncStartedAt: row.sync_started_at
+        ? row.sync_started_at.toISOString()
         : null,
     }));
   });
@@ -398,6 +452,24 @@ export async function decryptConnectionToken(
   databaseUrl: string,
   rawInput: unknown,
 ): Promise<ServiceResult<string>> {
+  return decryptTokenForStates(databaseUrl, rawInput, ["active"]);
+}
+
+// Decrypt the token of a needs_reconnect connection so the adapter can
+// mint an update mode Link token for it. Same trust boundary as
+// decryptConnectionToken.
+export async function decryptReconnectToken(
+  databaseUrl: string,
+  rawInput: unknown,
+): Promise<ServiceResult<string>> {
+  return decryptTokenForStates(databaseUrl, rawInput, ["needs_reconnect"]);
+}
+
+async function decryptTokenForStates(
+  databaseUrl: string,
+  rawInput: unknown,
+  states: string[],
+): Promise<ServiceResult<string>> {
   const parsed = z
     .object({ ownerId: uuid, connectionId: uuid })
     .strict()
@@ -432,7 +504,7 @@ export async function decryptConnectionToken(
       throw new OpFailure("NOT_FOUND");
     }
     const row = rows.rows[0];
-    if (row.state !== "active" || row.token_version === null) {
+    if (!states.includes(row.state) || row.token_version === null) {
       throw new OpFailure("INVALID_TRANSITION");
     }
     const envelope: TokenEnvelope = {

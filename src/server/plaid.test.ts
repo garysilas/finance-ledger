@@ -21,7 +21,11 @@ describe("loadPlaidSettings", () => {
     const result = loadPlaidSettings(valid);
     expect(result).toEqual({
       ok: true,
-      value: { clientId: "client-id", secret: "sandbox-secret" },
+      value: {
+        clientId: "client-id",
+        secret: "sandbox-secret",
+        webhookUrl: null,
+      },
     });
   });
 

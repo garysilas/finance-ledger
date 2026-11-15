@@ -12,6 +12,9 @@ export const FAILURE_CODES = [
   "DB_TIMEOUT",
   "COMMIT_UNKNOWN",
   "INTERNAL_FAILURE",
+  "SYNC_IN_PROGRESS",
+  "NEEDS_RECONNECT",
+  "ITEM_STILL_ERROR",
 ] as const;
 
 export type FailureCode = (typeof FAILURE_CODES)[number];

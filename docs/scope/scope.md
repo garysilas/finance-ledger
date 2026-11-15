@@ -30,7 +30,7 @@ Preferred stack is an owner proposal, not a scope decision: Next.js App Router, 
 | 3   | Financial data foundation          | Foundation | done        |
 | 4   | Design system and app shell        | Foundation | done        |
 | 5   | Owner to first spending view       | Slice 1    | done        |
-| 6   | Reliable sync and account overview | Slice 2    | planned     |
+| 6   | Reliable sync and account overview | Slice 2    | done        |
 | 7   | Spending investigation             | Slice 3    | planned     |
 | 8   | Monthly category budgets           | Slice 4    | planned     |
 | 9   | Recurring charge suggestions       | Slice 5    | planned     |
@@ -135,13 +135,22 @@ Make the first real thread work: owner sign in, connect one Sandbox institution,
 
 ## Slice 2: Trust the connected data
 
-### 6. Reliable sync and account overview · planned · needs a decision
+### 6. Reliable sync and account overview · done
 
 Deepen the existing connection path with reliable updates, sync health, balances, and net worth. Prove changes are applied once even when delivery repeats.
 
 **Done when:** `/transactions/sync` handles all pages, cursor advancement, retries, added, modified, and removed records, including pending replacement; webhook authenticity and repeated delivery are tested through a safe local Sandbox path; reconnect and disconnect behavior is clear; account balances and asset minus liability net worth show freshness and coverage limits.
 
-- [ ] Design it (spec): `/architect reliable sync and account overview`
+**Spec:** [0006](../specs/0006-reliable-sync-account-overview/index.md), content confirmed after cross check resolutions.
+
+- [x] Design it (spec): `/architect reliable sync and account overview`
+- [x] Build it: `/develop reliable sync and account overview` — code in `src/features/finance/` (`sync-state-service.ts`, `webhook-service.ts`, `net-worth-service.ts`), `src/server/` (`plaid.ts`, `webhook.ts`), `src/app/(app)/accounts/`, `src/app/api/webhooks/plaid/`
+  1. Migration plus the draining sync: connection fields, `webhook_delivery` table, drain loop with claim and retry bound, `history_complete`, `syncConnection` action, and a minimal `/accounts` page (AC-1, AC-5, AC-6).
+  2. Webhook path: verified `POST /api/webhooks/plaid` route with `jose`, delivery dedup, trigger mapping, and `PLAID_WEBHOOK_URL` registration (AC-2, AC-3, AC-4).
+  3. Reconnect and disconnect: update mode Link, server verified `completeReconnect`, `disconnectConnection`, and item error mapping (AC-7, AC-8).
+  4. Account overview completeness: full `/accounts` presentation with per account freshness, sync health, net worth, coverage notice, and all states (AC-9).
+- [x] Verify it: `/check verify reliable sync and account overview`
+- [x] Test it: `/test reliable sync and account overview`
 
 ## Slice 3: Explain a month
 

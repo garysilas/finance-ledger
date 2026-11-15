@@ -7,7 +7,7 @@ const requireSessionMock = vi.hoisted(() => vi.fn());
 const plaidCreateLinkToken = vi.hoisted(() => vi.fn());
 const plaidExchangePublicToken = vi.hoisted(() => vi.fn());
 const plaidLookupInstitution = vi.hoisted(() => vi.fn());
-const importInitialSyncPage = vi.hoisted(() => vi.fn());
+const drainConnectionSync = vi.hoisted(() => vi.fn());
 const createConnectionMock = vi.hoisted(() => vi.fn());
 const findConnectionByProviderItem = vi.hoisted(() => vi.fn());
 
@@ -19,7 +19,7 @@ vi.mock("@/server/plaid", () => ({
   plaidCreateLinkToken,
   plaidExchangePublicToken,
   plaidLookupInstitution,
-  importInitialSyncPage,
+  drainConnectionSync,
 }));
 vi.mock("@/features/finance/connection-service", () => ({
   createConnection: createConnectionMock,
@@ -57,7 +57,7 @@ beforeEach(() => {
   plaidCreateLinkToken.mockReset();
   plaidExchangePublicToken.mockReset();
   plaidLookupInstitution.mockReset();
-  importInitialSyncPage.mockReset();
+  drainConnectionSync.mockReset();
   createConnectionMock.mockReset();
   findConnectionByProviderItem.mockReset();
 });
@@ -120,7 +120,7 @@ describe("completeConnectionAction", () => {
       ok: true,
       value: { value: { connectionId: CONNECTION_ID, state: "active" } },
     });
-    importInitialSyncPage.mockResolvedValue({
+    drainConnectionSync.mockResolvedValue({
       ok: true,
       value: {
         connectionId: CONNECTION_ID,
@@ -161,7 +161,7 @@ describe("completeConnectionAction", () => {
         tokenPlaintext: "access-secret",
       }),
     );
-    expect(importInitialSyncPage).toHaveBeenCalledWith(DB_URL, {
+    expect(drainConnectionSync).toHaveBeenCalledWith(DB_URL, {
       ownerId: SESSION.ownerId,
       connectionId: CONNECTION_ID,
     });
@@ -172,7 +172,7 @@ describe("completeConnectionAction", () => {
     const ok = await completeConnectionAction("public-token");
     expect(JSON.stringify(ok)).not.toContain("access-secret");
 
-    importInitialSyncPage.mockResolvedValue(fail("PROVIDER_UNAVAILABLE"));
+    drainConnectionSync.mockResolvedValue(fail("PROVIDER_UNAVAILABLE"));
     const bad = await completeConnectionAction("public-token");
     expect(JSON.stringify(bad)).not.toContain("access-secret");
   });
@@ -181,7 +181,7 @@ describe("completeConnectionAction", () => {
     ["exchange", plaidExchangePublicToken, "INVALID_INPUT"],
     ["institution", plaidLookupInstitution, "PROVIDER_UNAVAILABLE"],
     ["connection", createConnectionMock, "INTERNAL_FAILURE"],
-    ["sync", importInitialSyncPage, "PROVIDER_UNAVAILABLE"],
+    ["sync", drainConnectionSync, "PROVIDER_UNAVAILABLE"],
   ])("reports a %s stage failure with its code", async (stage, mock, code) => {
     happyPath();
     mock.mockResolvedValue(fail(code));
@@ -217,12 +217,12 @@ describe("completeConnectionAction", () => {
       stage: "connection",
       code: "CONFLICT",
     });
-    expect(importInitialSyncPage).not.toHaveBeenCalled();
+    expect(drainConnectionSync).not.toHaveBeenCalled();
   });
 
   it("carries the connection id on a sync failure so retry resumes", async () => {
     happyPath();
-    importInitialSyncPage.mockResolvedValue(fail("CONFLICT"));
+    drainConnectionSync.mockResolvedValue(fail("CONFLICT"));
     const result = await completeConnectionAction("public-token");
     expect(result).toEqual({
       ok: false,
@@ -237,24 +237,24 @@ describe("retryInitialSyncAction", () => {
   it("rejects a malformed connection id", async () => {
     const result = await retryInitialSyncAction("not-a-uuid");
     expect(result).toEqual({ ok: false, code: "INVALID_INPUT" });
-    expect(importInitialSyncPage).not.toHaveBeenCalled();
+    expect(drainConnectionSync).not.toHaveBeenCalled();
   });
 
   it("imports one page for the session owner", async () => {
-    importInitialSyncPage.mockResolvedValue({
+    drainConnectionSync.mockResolvedValue({
       ok: true,
       value: { connectionId: CONNECTION_ID, cursor: "c", counts: {} },
     });
     const result = await retryInitialSyncAction(CONNECTION_ID);
     expect(result).toEqual({ ok: true });
-    expect(importInitialSyncPage).toHaveBeenCalledWith(DB_URL, {
+    expect(drainConnectionSync).toHaveBeenCalledWith(DB_URL, {
       ownerId: SESSION.ownerId,
       connectionId: CONNECTION_ID,
     });
   });
 
   it("passes through the sync failure code", async () => {
-    importInitialSyncPage.mockResolvedValue(fail("NOT_FOUND"));
+    drainConnectionSync.mockResolvedValue(fail("NOT_FOUND"));
     const result = await retryInitialSyncAction(CONNECTION_ID);
     expect(result).toEqual({ ok: false, code: "NOT_FOUND" });
   });

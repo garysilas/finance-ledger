@@ -79,6 +79,15 @@ export const connection = ledger.table(
       mode: "date",
     }),
     historyComplete: boolean("history_complete").notNull().default(false),
+    syncStartedAt: timestamp("sync_started_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    lastSyncAttemptAt: timestamp("last_sync_attempt_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    lastSyncFailure: text("last_sync_failure"),
     ...mutable,
   },
   (table) => [
@@ -108,6 +117,10 @@ export const connection = ledger.table(
     check(
       "connection_provider_environment",
       sql`${table.provider} = 'plaid' AND ${table.environment} = 'sandbox'`,
+    ),
+    check(
+      "connection_last_sync_failure",
+      sql`${table.lastSyncFailure} IS NULL OR ${table.lastSyncFailure} IN ('INVALID_INPUT', 'UNSUPPORTED_MONEY', 'NOT_FOUND', 'CONFLICT', 'INVALID_TRANSITION', 'CONFIG_INVALID', 'KEY_UNAVAILABLE', 'PROVIDER_UNAVAILABLE', 'TOKEN_UNREADABLE', 'DB_UNAVAILABLE', 'DB_TIMEOUT', 'COMMIT_UNKNOWN', 'INTERNAL_FAILURE', 'SYNC_IN_PROGRESS', 'NEEDS_RECONNECT', 'ITEM_STILL_ERROR')`,
     ),
   ],
 );
@@ -409,6 +422,40 @@ export const requestReceipt = ledger.table(
     check(
       "request_receipt_outcome",
       sql`${table.outcome} IN ('applied', 'no_change')`,
+    ),
+  ],
+);
+
+export const webhookDelivery = ledger.table(
+  "webhook_delivery",
+  {
+    id: uuid("id").primaryKey(),
+    ownerId: uuid("owner_id").notNull(),
+    connectionId: uuid("connection_id"),
+    webhookId: text("webhook_id").notNull(),
+    webhookType: text("webhook_type").notNull(),
+    webhookCode: text("webhook_code").notNull(),
+    outcome: text("outcome").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.ownerId],
+      foreignColumns: [owner.id],
+      name: "webhook_delivery_owner_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.ownerId, table.connectionId],
+      foreignColumns: [connection.ownerId, connection.id],
+      name: "webhook_delivery_connection_fk",
+    }).onDelete("restrict"),
+    unique("webhook_delivery_webhook_id_key").on(table.webhookId),
+    unique("webhook_delivery_owner_id_key").on(table.ownerId, table.id),
+    check(
+      "webhook_delivery_outcome",
+      sql`${table.outcome} IN ('received', 'applied', 'duplicate', 'ignored', 'rejected')`,
     ),
   ],
 );

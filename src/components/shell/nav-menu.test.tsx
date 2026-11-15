@@ -35,7 +35,7 @@ describe("NavMenu", () => {
     expect(link).toHaveAttribute("href", "/status");
     if (current) expect(link).toHaveAttribute("aria-current", "page");
     else expect(link).not.toHaveAttribute("aria-current");
-    expect(nav.getAllByRole("link")).toHaveLength(2);
+    expect(nav.getAllByRole("link")).toHaveLength(3);
   });
 
   it.each([

@@ -16,7 +16,8 @@ This area owns private settings, the database connection check, safe diagnostics
 8. `db/finance.ts` runs finance operations inside one unit of work with deadlines and rollback on `OpFailure`.
 9. `password.ts` verifies the owner password against the scrypt `password_hash`; the hash is set only by `pnpm auth:set-password`.
 10. `session.ts` issues and validates opaque database sessions (SHA 256 token hash stored, raw token only in the `ledger_session` httpOnly cookie). `requireSession` is the authoritative guard every protected page and action calls; `src/proxy.ts` only checks cookie presence at the boundary.
-11. `plaid.ts` is the Plaid adapter: link token creation, public token exchange, institution lookup, and one `/transactions/sync` page. Credentials come only from private settings; tokens pass through `tokens.ts` before storage.
+11. `plaid.ts` is the Plaid adapter: link token creation, public token exchange, institution lookup, the `/transactions/sync` drain loop with claim and retry bound, and update mode Link helpers. Credentials come only from private settings; tokens pass through `tokens.ts` before storage.
+12. `webhook.ts` verifies `Plaid-Verification` JWTs with `jose` against the provider's verification key endpoint; `src/app/api/webhooks/plaid/route.ts` uses it and dedupes deliveries through `webhook-service`.
 
 ## Conventions
 
