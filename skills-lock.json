@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "skills": {
+    "plaid-fintech": {
+      "source": "../../../../tmp/aas-plaid/skills/plaid-fintech",
+      "sourceType": "local",
+      "computedHash": "5d26482e59c0af404651abeff63c4d621705b76e3ea69c5c8298bd2a88d7968c"
+    }
+  }
+}

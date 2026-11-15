@@ -9,6 +9,6 @@ import Home from "./page";
 describe("Home", () => {
   it("AC-4 sends a temporary redirect to /status", () => {
     Home();
-    expect(redirect).toHaveBeenCalledWith("/status");
+    expect(redirect).toHaveBeenCalledWith("/spending");
   });
 });

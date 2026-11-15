@@ -2,6 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const CANONICAL_HOST = "127.0.0.1:3000";
 const CANONICAL_ORIGIN = "http://127.0.0.1:3000";
+const SESSION_COOKIE = "ledger_session";
+
+// Public destinations. Everything else, including server action posts to
+// protected pages, requires a session cookie at the boundary; the row
+// itself is revalidated inside each page and action by requireSession.
+const PUBLIC_PATHS = new Set(["/signin", "/status", "/design"]);
 
 export function proxy(request: NextRequest) {
   const host = request.headers.get("host");
@@ -18,6 +24,19 @@ export function proxy(request: NextRequest) {
       status: 403,
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
+  }
+
+  const { pathname, search } = request.nextUrl;
+  if (
+    !PUBLIC_PATHS.has(pathname) &&
+    request.cookies.get(SESSION_COOKIE)?.value === undefined
+  ) {
+    const signIn = new URL("/signin", CANONICAL_ORIGIN);
+    const target = `${pathname}${search}`;
+    if (target !== "/") {
+      signIn.searchParams.set("return", target);
+    }
+    return NextResponse.redirect(signIn, 307);
   }
 
   return NextResponse.next();

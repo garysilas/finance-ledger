@@ -315,7 +315,7 @@ describe.skipIf(!url)("monthly spending regression", () => {
     expect(result.pendingOutflowUnits).toBe("0");
     expect(result.pendingRefundUnits).toBe("0");
     expect(result.categories).toEqual([]);
-    expect(result.coverage.historyCompleteness).toBe("unknown");
+    expect(result.coverage.historyCompleteness).toBe("partial");
   });
 
   it("sums beyond a single bigint through exact numeric totals (AC-2)", async () => {

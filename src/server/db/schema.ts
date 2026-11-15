@@ -47,6 +47,7 @@ export const owner = ledger.table(
     id: uuid("id").primaryKey(),
     singletonFlag: boolean("singleton_flag").notNull().default(true),
     timeZone: text("time_zone").notNull().default("America/New_York"),
+    passwordHash: text("password_hash"),
     ...timestamps,
   },
   (table) => [
@@ -77,6 +78,7 @@ export const connection = ledger.table(
       withTimezone: true,
       mode: "date",
     }),
+    historyComplete: boolean("history_complete").notNull().default(false),
     ...mutable,
   },
   (table) => [
@@ -342,6 +344,38 @@ export const transaction = ledger.table(
       "transaction_owner_classification",
       sql`${table.ownerClassification} IS NULL OR ${table.ownerClassification} IN ('spending', 'refund', 'income', 'transfer', 'card_payment', 'unclassified')`,
     ),
+  ],
+);
+
+export const session = ledger.table(
+  "session",
+  {
+    id: uuid("id").primaryKey(),
+    ownerId: uuid("owner_id").notNull(),
+    tokenHash: bytea("token_hash").notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    absoluteExpiresAt: timestamp("absolute_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+    ...timestamps,
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.ownerId],
+      foreignColumns: [owner.id],
+      name: "session_owner_fk",
+    }).onDelete("restrict"),
+    unique("session_token_hash_key").on(table.tokenHash),
+    unique("session_owner_id_key").on(table.ownerId, table.id),
+    index("session_expires_at_idx").on(table.expiresAt),
   ],
 );
 

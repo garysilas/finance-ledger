@@ -19,6 +19,9 @@ const url = process.env.TEST_DATABASE_URL ?? "";
 
 describe.skipIf(!url)("financial foundation thin thread", () => {
   it("migrates, stores, and reads a month", async () => {
+    // Unique per-run month window so reruns on a shared disposable
+    // database never collide with earlier seeded rows.
+    const month = `${2000 + Math.floor(Math.random() * 1000)}-11`;
     const ownerId = randomUUID();
     const init = await initializeOwner(url, {
       ownerId,
@@ -33,7 +36,7 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
       ownerId: realOwner,
       provider: "plaid",
       environment: "sandbox",
-      providerItemId: "item-smoke-1",
+      providerItemId: `item-smoke-${randomUUID()}`,
       institutionId: "ins_1",
       institutionName: "Smoke Bank",
       tokenPlaintext: "access-sandbox-fake-token",
@@ -66,7 +69,7 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
           current: "1000.00",
           available: "950.00",
           creditLimit: null,
-          balanceObservedAt: "2026-11-01T00:00:00Z",
+          balanceObservedAt: `${month}-01T00:00:00Z`,
         },
       ],
       transactionUpserts: [
@@ -76,8 +79,8 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
           amount: "12.34",
           currencyCode: "USD",
           postingState: "posted",
-          providerDate: "2026-11-03",
-          postedDate: "2026-11-03",
+          providerDate: `${month}-03`,
+          postedDate: `${month}-03`,
           authorizedDate: null,
           providerPendingTransactionId: null,
           description: "Coffee",
@@ -92,7 +95,7 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
           amount: "5.00",
           currencyCode: "USD",
           postingState: "pending",
-          providerDate: "2026-11-04",
+          providerDate: `${month}-04`,
           postedDate: null,
           authorizedDate: null,
           providerPendingTransactionId: null,
@@ -110,8 +113,8 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
 
     const spending = await getMonthlySpending(
       url,
-      { ownerId: realOwner, month: "2026-11" },
-      () => new Date("2026-11-12T12:00:00Z"),
+      { ownerId: realOwner, month },
+      () => new Date(`${month}-12T12:00:00Z`),
     );
     expect(spending.ok).toBe(true);
     if (!spending.ok) return;
@@ -121,7 +124,7 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
       (c) => c.stableKey === "dining",
     );
     expect(dining?.spentUnits).toBe("1234");
-    expect(spending.value.coverage.historyCompleteness).toBe("unknown");
+    expect(spending.value.coverage.historyCompleteness).toBe("partial");
 
     // receipt replay: identical batch returns already applied
     const replay = await applyProviderBatch(url, {
@@ -140,7 +143,7 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
           current: "1000.00",
           available: "950.00",
           creditLimit: null,
-          balanceObservedAt: "2026-11-01T00:00:00Z",
+          balanceObservedAt: `${month}-01T00:00:00Z`,
         },
       ],
       transactionUpserts: [
@@ -150,8 +153,8 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
           amount: "12.34",
           currencyCode: "USD",
           postingState: "posted",
-          providerDate: "2026-11-03",
-          postedDate: "2026-11-03",
+          providerDate: `${month}-03`,
+          postedDate: `${month}-03`,
           authorizedDate: null,
           providerPendingTransactionId: null,
           description: "Coffee",
@@ -166,7 +169,7 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
           amount: "5.00",
           currencyCode: "USD",
           postingState: "pending",
-          providerDate: "2026-11-04",
+          providerDate: `${month}-04`,
           postedDate: null,
           authorizedDate: null,
           providerPendingTransactionId: null,
@@ -197,7 +200,7 @@ describe.skipIf(!url)("financial foundation thin thread", () => {
 
     const after = await getMonthlySpending(url, {
       ownerId: realOwner,
-      month: "2026-11",
+      month,
     });
     expect(after.ok && after.value.postedTotalUnits).toBe("1234");
   });

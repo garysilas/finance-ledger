@@ -286,6 +286,112 @@ export async function setConnectionState(
   });
 }
 
+export type ConnectionLookup = {
+  connectionId: string;
+  state: string;
+};
+
+// Resolve a provider item to its connection. Used to reconcile a
+// re-run of connect that hit the provider item unique constraint.
+export async function findConnectionByProviderItem(
+  databaseUrl: string,
+  rawInput: unknown,
+): Promise<ServiceResult<ConnectionLookup | null>> {
+  const parsed = z
+    .object({ ownerId: uuid, providerItemId: idText })
+    .strict()
+    .safeParse(rawInput);
+  if (!parsed.success) {
+    return failure("INVALID_INPUT");
+  }
+  const { ownerId, providerItemId } = parsed.data;
+  return runUnitOfWork(databaseUrl, async (db) => {
+    const rows = await db.query<{ id: string; state: string }>(
+      `SELECT id, state FROM ledger.connection
+       WHERE owner_id = $1 AND provider_item_id = $2`,
+      [ownerId, providerItemId],
+    );
+    const row = rows.rows[0];
+    return row === undefined
+      ? null
+      : { connectionId: row.id, state: row.state };
+  });
+}
+
+export type OwnerConnectionSummary = {
+  connectionId: string;
+  state: string;
+  institutionName: string | null;
+  historyComplete: boolean;
+  lastSuccessfulSyncAt: string | null;
+};
+
+// Display safe connection rows for the owner scoped views. Carries no
+// token material and no cursor.
+export async function listOwnerConnections(
+  databaseUrl: string,
+  rawInput: unknown,
+): Promise<ServiceResult<OwnerConnectionSummary[]>> {
+  const parsed = z.object({ ownerId: uuid }).strict().safeParse(rawInput);
+  if (!parsed.success) {
+    return failure("INVALID_INPUT");
+  }
+  const { ownerId } = parsed.data;
+  return runUnitOfWork(databaseUrl, async (db) => {
+    const rows = await db.query<{
+      id: string;
+      state: string;
+      institution_name: string | null;
+      history_complete: boolean;
+      last_successful_sync_at: Date | null;
+    }>(
+      `SELECT id, state, institution_name, history_complete,
+              last_successful_sync_at
+       FROM ledger.connection WHERE owner_id = $1 ORDER BY id`,
+      [ownerId],
+    );
+    return rows.rows.map((row) => ({
+      connectionId: row.id,
+      state: row.state,
+      institutionName: row.institution_name,
+      historyComplete: row.history_complete,
+      lastSuccessfulSyncAt: row.last_successful_sync_at
+        ? row.last_successful_sync_at.toISOString()
+        : null,
+    }));
+  });
+}
+
+// Record a committed sync page. The adapter calls this after a batch
+// commits; a failed or partial run leaves the timestamp unchanged.
+export async function markSyncSuccess(
+  databaseUrl: string,
+  rawInput: unknown,
+): Promise<ServiceResult<null>> {
+  const parsed = z
+    .object({ ownerId: uuid, connectionId: uuid })
+    .strict()
+    .safeParse(rawInput);
+  if (!parsed.success) {
+    return failure("INVALID_INPUT");
+  }
+  const { ownerId, connectionId } = parsed.data;
+  return runUnitOfWork(databaseUrl, async (db) => {
+    const rows = await db.query(
+      `UPDATE ledger.connection
+       SET last_successful_sync_at = now(),
+           revision = revision + 1, updated_at = now()
+       WHERE id = $1 AND owner_id = $2 AND state = 'active'
+       RETURNING id`,
+      [connectionId, ownerId],
+    );
+    if (rows.rows.length === 0) {
+      throw new OpFailure("NOT_FOUND");
+    }
+    return null;
+  });
+}
+
 // Decrypt a connection token for the trusted provider adapter only.
 // Requires an active connection; plaintext is never part of a display DTO.
 export async function decryptConnectionToken(

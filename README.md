@@ -4,8 +4,9 @@ A local, single owner personal finance app. This repository currently
 contains the scaffold inside a shared app shell: a status page that proves
 the browser to server to database path, with Postgres 18 running in Docker.
 
-Routes: `/` redirects to `/status`, which shows the database check inside
-the shell (sidebar, navigation, health indicator, theme control). `/design`
+Routes: `/signin` is public. `/` and `/spending` need a signed in owner
+session. `/status` stays public and shows the database check inside the
+shell (sidebar, navigation, health indicator, theme control). `/design`
 is a development only style reference and returns 404 in production. Light
 and dark themes follow the system setting by default; the Theme control in
 the sidebar footer overrides it.
@@ -60,9 +61,10 @@ Pinned toolchain (all versions exact, chosen per spec 0001):
    pnpm dev
    ```
 
-   Open http://127.0.0.1:3000. It redirects to `/status`, which reports
-   database status and the time of the last check; "Check again" runs a
-   fresh check. `/design` shows the design token and primitive reference.
+   Open http://127.0.0.1:3000. It redirects to `/signin` until a session
+   exists. `/status` reports database status and the time of the last
+   check; "Check again" runs a fresh check. `/design` shows the design
+   token and primitive reference.
 
 4. Production check:
 
@@ -78,6 +80,24 @@ Pinned toolchain (all versions exact, chosen per spec 0001):
 - `pnpm db:up` / `pnpm db:down` start and stop Postgres
 - `pnpm test` Vitest suite, `pnpm test:e2e` Playwright suite,
   `pnpm test:e2e:design` the development suite for `/design`
+- `pnpm auth:set-password` sets the owner password. It reads
+  `LEDGER_OWNER_PASSWORD` or a hidden prompt (never an argument), needs
+  12 or more characters, and refuses to replace an existing password
+  unless run with `--reset`.
+
+## Owner sign in and Plaid Sandbox
+
+Set the owner password once with `pnpm auth:set-password`, then sign in
+at `/signin`. Sessions slide for 7 days of use up to a 30 day cap, and
+Sign out revokes the session row.
+
+Spending imports come from one Plaid Sandbox institution. Set
+`PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_ENV=sandbox` in
+`.env.local`. These are needed only when connecting or syncing; builds
+and reads work without them. The access token is stored encrypted and
+never reaches the browser. The first connect imports accounts and one
+page of transactions, so older months stay partial until a later feature
+adds full history.
 
 ## Financial data
 

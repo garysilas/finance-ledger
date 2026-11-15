@@ -1,10 +1,13 @@
 import { cookies } from "next/headers";
 import { AppSidebar } from "@/components/shell/app-sidebar";
+import { Button } from "@/components/ui/button";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { SESSION_COOKIE_NAME } from "@/server/session";
+import { signOut } from "./actions";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 
@@ -15,6 +18,7 @@ export default async function AppLayout({
 }) {
   const store = await cookies();
   const defaultOpen = store.get(SIDEBAR_COOKIE_NAME)?.value !== "false";
+  const signedIn = store.get(SESSION_COOKIE_NAME)?.value !== undefined;
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
@@ -28,6 +32,13 @@ export default async function AppLayout({
       <SidebarInset id="main" tabIndex={-1} className="outline-none">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
           <SidebarTrigger className="-ms-1" />
+          {signedIn ? (
+            <form action={signOut} className="ms-auto">
+              <Button type="submit" variant="ghost" size="sm">
+                Sign out
+              </Button>
+            </form>
+          ) : null}
         </header>
         {children}
       </SidebarInset>

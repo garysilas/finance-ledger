@@ -67,18 +67,29 @@ export async function initializeOwner(
         // Acknowledge the recorded owner rather than inventing a second.
         ownerId = existing.rows[0].id;
       } else {
-        ownerId = input.ownerId;
-        await db.query(
+        // A concurrent initializer may win the insert; DO NOTHING keeps
+        // this transaction alive so the re-read below sees the winner.
+        const placed = await db.query(
           `INSERT INTO ledger.owner (id, singleton_flag, time_zone)
-           VALUES ($1, true, 'America/New_York')`,
-          [ownerId],
+           VALUES ($1, true, 'America/New_York')
+           ON CONFLICT DO NOTHING
+           RETURNING id`,
+          [input.ownerId],
         );
-        inserted += 1;
-        events.push({
-          targetType: "owner",
-          targetId: ownerId,
-          resultingRevision: 1n,
-        });
+        if (placed.rows.length > 0) {
+          ownerId = input.ownerId;
+          inserted += 1;
+          events.push({
+            targetType: "owner",
+            targetId: ownerId,
+            resultingRevision: 1n,
+          });
+        } else {
+          const winner = await db.query<{ id: string }>(
+            "SELECT id FROM ledger.owner",
+          );
+          ownerId = winner.rows[0].id;
+        }
       }
 
       for (const seed of SEED_CATEGORIES) {
@@ -92,11 +103,22 @@ export async function initializeOwner(
           continue;
         }
         const categoryId = randomUUID();
-        await db.query(
+        const placed = await db.query<{ id: string }>(
           `INSERT INTO ledger.category (id, owner_id, stable_key, label)
-           VALUES ($1,$2,$3,$4)`,
+           VALUES ($1,$2,$3,$4)
+           ON CONFLICT DO NOTHING
+           RETURNING id`,
           [categoryId, ownerId, seed.stableKey, seed.label],
         );
+        if (placed.rows.length === 0) {
+          const winner = await db.query<{ id: string }>(
+            `SELECT id FROM ledger.category
+             WHERE owner_id = $1 AND stable_key = $2`,
+            [ownerId, seed.stableKey],
+          );
+          categoryIds[seed.stableKey] = winner.rows[0].id;
+          continue;
+        }
         categoryIds[seed.stableKey] = categoryId;
         inserted += 1;
         events.push({
@@ -109,6 +131,7 @@ export async function initializeOwner(
       return {
         value: { ownerId, categoryIds },
         targetId: ownerId,
+        ownerId,
         resultingRevision: 1n,
         counts: { inserted, updated: 0, removed: 0 },
         events,

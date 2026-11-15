@@ -61,7 +61,7 @@ export type MonthlySpendingResult = {
       state: string;
       lastSuccessfulSyncAt: string | null;
     }[];
-    historyCompleteness: "unknown";
+    historyCompleteness: "unknown" | "partial" | "complete";
   };
 };
 
@@ -217,8 +217,9 @@ export async function getMonthlySpending(
       id: string;
       state: string;
       last_successful_sync_at: Date | null;
+      history_complete: boolean;
     }>(
-      `SELECT id, state, last_successful_sync_at
+      `SELECT id, state, last_successful_sync_at, history_complete
        FROM ledger.connection WHERE owner_id = $1 ORDER BY id`,
       [input.ownerId],
     );
@@ -296,7 +297,12 @@ export async function getMonthlySpending(
             ? row.last_successful_sync_at.toISOString()
             : null,
         })),
-        historyCompleteness: "unknown",
+        historyCompleteness:
+          connectionRows.rows.length === 0
+            ? "unknown"
+            : connectionRows.rows.every((row) => row.history_complete)
+              ? "complete"
+              : "partial",
       },
     };
   });

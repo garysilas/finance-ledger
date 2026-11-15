@@ -2,7 +2,7 @@
 
 ## Overview
 
-This area owns private settings, the database connection check, safe diagnostics, the financial schema, and encrypted token storage. Root project rules also apply. Provider integrations are not here yet.
+This area owns private settings, the database connection check, safe diagnostics, the financial schema, encrypted token storage, owner authentication, and the Plaid server adapter. Root project rules also apply.
 
 ## Key files
 
@@ -14,6 +14,9 @@ This area owns private settings, the database connection check, safe diagnostics
 6. `tokens.ts` encrypts and decrypts provider access tokens with a versioned envelope and a file backed owner key; it never logs paths, key material, or crypto exceptions.
 7. `db/schema.ts` defines the financial tables in Drizzle; generated SQL lives in `db/migrations/`.
 8. `db/finance.ts` runs finance operations inside one unit of work with deadlines and rollback on `OpFailure`.
+9. `password.ts` verifies the owner password against the scrypt `password_hash`; the hash is set only by `pnpm auth:set-password`.
+10. `session.ts` issues and validates opaque database sessions (SHA 256 token hash stored, raw token only in the `ledger_session` httpOnly cookie). `requireSession` is the authoritative guard every protected page and action calls; `src/proxy.ts` only checks cookie presence at the boundary.
+11. `plaid.ts` is the Plaid adapter: link token creation, public token exchange, institution lookup, and one `/transactions/sync` page. Credentials come only from private settings; tokens pass through `tokens.ts` before storage.
 
 ## Conventions
 
@@ -35,5 +38,6 @@ The current validator requires `POSTGRES_PASSWORD` at runtime, even though spec 
 
 [Spec 0001](../../docs/specs/0001-architecture-runnable-scaffold/index.md) defines configuration, database limits, failure behavior, and security boundaries.
 [Spec 0003](../../docs/specs/0003-financial-data-foundation/index.md) defines the financial schema, migration roles, and token encryption handled here.
+[Spec 0005](../../docs/specs/0005-owner-first-spending-view/index.md) defines owner sign in, sessions, and the Plaid connect and initial sync flow.
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
