@@ -2,8 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 
-export function RetryButton() {
+export function RetryButton({
+  onRetry,
+  label = "Check again",
+  pendingLabel = "Checking database connection...",
+  completeLabel = "Check complete.",
+}: {
+  onRetry?: () => void;
+  label?: string;
+  pendingLabel?: string;
+  completeLabel?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [announcement, setAnnouncement] = useState("");
@@ -11,28 +22,32 @@ export function RetryButton() {
 
   useEffect(() => {
     if (wasPending.current && !isPending) {
-      setAnnouncement("Check complete.");
+      setAnnouncement(completeLabel);
     }
     wasPending.current = isPending;
-  }, [isPending]);
+  }, [isPending, completeLabel]);
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <button
+      <Button
         type="button"
+        variant="outline"
         disabled={isPending}
         onClick={() =>
           startTransition(() => {
             setAnnouncement("");
-            router.refresh();
+            if (onRetry) {
+              onRetry();
+            } else {
+              router.refresh();
+            }
           })
         }
-        className="rounded border border-zinc-400 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-60"
       >
-        {isPending ? "Checking database connection..." : "Check again"}
-      </button>
-      <p aria-live="polite" className="text-sm text-zinc-600">
-        {isPending ? "Checking database connection..." : announcement}
+        {isPending ? pendingLabel : label}
+      </Button>
+      <p aria-live="polite" className="text-sm text-muted-foreground">
+        {isPending ? pendingLabel : announcement}
       </p>
     </div>
   );

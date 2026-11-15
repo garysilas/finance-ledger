@@ -11,7 +11,7 @@ describe("ErrorPage", () => {
     render(<ErrorPage reset={() => {}} />);
     expect(screen.getByRole("heading", { name: "Ledger" })).toBeInTheDocument();
     expect(
-      screen.getByText("Ledger could not show the status page."),
+      screen.getByText("Ledger could not show this page."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Try again" }),

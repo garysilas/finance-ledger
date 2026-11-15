@@ -28,7 +28,7 @@ Preferred stack is an owner proposal, not a scope decision: Next.js App Router, 
 | 1   | Architecture and runnable scaffold | Foundation | done        |
 | 2   | Coding standards and tooling       | Foundation | done        |
 | 3   | Financial data foundation          | Foundation | done        |
-| 4   | Design system and app shell        | Foundation | planned     |
+| 4   | Design system and app shell        | Foundation | done        |
 | 5   | Owner to first spending view       | Slice 1    | planned     |
 | 6   | Reliable sync and account overview | Slice 2    | planned     |
 | 7   | Spending investigation             | Slice 3    | planned     |
@@ -93,13 +93,24 @@ Define the durable financial records, ownership, money rules, and migration boun
 - [x] Verify it: `/check verify financial data foundation`
 - [x] Test it: `/test financial data foundation`
 
-### 4. Design system and app shell · planned · needs a decision
+### 4. Design system and app shell · done
 
 Set a cohesive visual language and navigation for spending, budgets, accounts, and later chat. Build reusable primitives rather than complete screens on fake data.
 
 **Done when:** the visual spec defines type, spacing, semantic colors, theme variables, and accessible components; the shell supports desktop and narrow layouts with clear navigation and shared state patterns.
 
-- [ ] Design it (spec): `/architect design system and app shell`
+**Spec:** [0004](../specs/0004-design-system-app-shell/index.md), content confirmed after cross check resolutions.
+
+**Code:** `src/components/` (ui, shell, finance, states), `src/app/(app)/`, `src/app/design/`, `src/features/finance/format.ts`, `src/features/finance/month-param.ts`, `src/app/globals.css`, `playwright.design.config.ts`
+
+- [x] Design it (spec): `/architect design system and app shell`
+- [x] Build it: `/develop design system and app shell`
+  1. [x] Prove a thin themed shell around the real status page at `/status`, with the redirect, the wider proxy matcher, and the streamed health indicator (AC-1, AC-3, AC-4, AC-5, AC-8).
+  2. [x] Tune the tweakcn tokens, add status tokens, the theme control, and the narrow sheet layout, with axe scans (AC-2, AC-6, AC-7, AC-15).
+  3. [x] Build money, date, freshness, status badge, month param, and state primitives (AC-9 through AC-13).
+  4. [x] Add the dev only `/design` reference, its development test suite, the layout shift check, and README updates (AC-14, AC-15).
+- [x] Verify it: `/check verify design system and app shell`
+- [x] Test it: `/test design system and app shell`
 
 ## Slice 1: Prove the real spending path
 

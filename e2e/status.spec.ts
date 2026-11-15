@@ -13,21 +13,53 @@ const VALID_MESSAGES = [
 ];
 
 test.describe("status page", () => {
+  test("AC-4 sends a temporary redirect from the root", async ({ request }) => {
+    const response = await request.get("/", { maxRedirects: 0 });
+    expect(response.status()).toBe(307);
+    expect(response.headers().location).toBe("/status");
+  });
+
+  for (const path of ["/status", "/design", "/missing-page"]) {
+    test(`AC-4 rejects a wrong Host at ${path}`, async ({ request }) => {
+      const response = await request.get(path, {
+        headers: { host: "evil.example" },
+      });
+      expect(response.status()).toBe(400);
+      expect(await response.text()).toBe("Invalid Host header.");
+    });
+
+    test(`AC-4 rejects a foreign Origin at ${path}`, async ({ request }) => {
+      const response = await request.get(path, {
+        headers: { origin: "https://evil.example" },
+      });
+      expect(response.status()).toBe(403);
+      expect(await response.text()).toBe(
+        "Cross-origin requests are not allowed.",
+      );
+    });
+  }
+  test("the root route redirects to the status page", async ({ page }) => {
+    const response = await page.goto("/");
+    expect(page.url()).toContain("/status");
+    expect(response?.status()).toBe(200);
+    await expect(
+      page.getByRole("heading", { name: "System status", level: 1 }),
+    ).toBeVisible();
+  });
+
   test("renders the scaffold surface with a real status result", async ({
     page,
   }) => {
-    const response = await page.goto("/");
+    const response = await page.goto("/status");
 
     expect(response?.status()).toBe(200);
     expect(response?.headers()["cache-control"]).toContain("no-store");
 
     await expect(
-      page.getByRole("heading", { name: "Ledger", level: 1 }),
+      page.getByRole("heading", { name: "System status", level: 1 }),
     ).toBeVisible();
     await expect(
-      page.getByText(
-        "Local scaffold. This page checks the connection to your local database.",
-      ),
+      page.getByText("This page checks the connection to your local database."),
     ).toBeVisible();
 
     const statusLine = page.getByText(/^Status: /);
@@ -55,7 +87,7 @@ test.describe("status page", () => {
   });
 
   test("retry issues a fresh check with a new timestamp", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/status");
     const first = await page.locator("time").getAttribute("datetime");
 
     await page.getByRole("button", { name: "Check again" }).click();
@@ -69,15 +101,17 @@ test.describe("status page", () => {
   });
 
   test("ignores unknown query parameters", async ({ page }) => {
-    const response = await page.goto("/?utm_source=evil&debug=1");
+    const response = await page.goto("/status?utm_source=evil&debug=1");
     expect(response?.status()).toBe(200);
     await expect(page.getByText(/^Status: /)).toBeVisible();
   });
 
   test("remains usable at a 320 pixel viewport", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 480 });
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Ledger" })).toBeVisible();
+    await page.goto("/status");
+    await expect(
+      page.getByRole("heading", { name: "System status" }),
+    ).toBeVisible();
     const button = page.getByRole("button", { name: "Check again" });
     await expect(button).toBeVisible();
     const box = await button.boundingBox();
@@ -88,7 +122,7 @@ test.describe("status page", () => {
   test("does not leak settings or secrets into the rendered HTML", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/status");
     const html = await page.content();
     for (const secret of [
       process.env.POSTGRES_PASSWORD,
@@ -105,7 +139,7 @@ test.describe("status page", () => {
       baseURL: "http://127.0.0.1:3000",
       extraHTTPHeaders: { origin: "https://evil.example" },
     });
-    const response = await api.get("/");
+    const response = await api.get("/status");
     expect(response.status()).toBe(403);
     expect(await response.text()).toBe(
       "Cross-origin requests are not allowed.",
@@ -117,7 +151,7 @@ test.describe("status page", () => {
     const api = await playwright.request.newContext({
       baseURL: "http://127.0.0.1:3000",
     });
-    const response = await api.get("/");
+    const response = await api.get("/status");
     expect(response.status()).toBe(200);
     await api.dispose();
   });
