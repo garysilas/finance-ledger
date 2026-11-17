@@ -10,17 +10,37 @@ import {
 import { listOwnerAccounts } from "@/features/finance/account-service";
 import { listOwnerConnections } from "@/features/finance/connection-service";
 import { parseMonth } from "@/features/finance/dates";
+import { UNCATEGORIZED_STABLE_KEY } from "@/features/finance/classification";
 import { resolveMonthParam } from "@/features/finance/month-param";
 import { getMonthlySpending } from "@/features/finance/spending-service";
+import {
+  UNCATEGORIZED_PARAM,
+  parseTransactionFilters,
+  spendingHref,
+} from "@/features/finance/transaction-params";
+import {
+  listMonthTransactions,
+  listTransactionFilterOptions,
+} from "@/features/finance/transaction-service";
 import { Freshness } from "@/components/finance/freshness";
 import { Money } from "@/components/finance/money";
 import { MonthLabel } from "@/components/finance/month-label";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/utils";
 import { validateEnv } from "@/server/env";
 import { requireSession } from "@/server/session";
 import { ConnectButton, RetrySyncButton } from "./connect-button";
+import { TransactionsPanel } from "./transactions-panel";
+
+type SearchParams = {
+  month?: string | string[];
+  category?: string | string[];
+  account?: string | string[];
+  q?: string | string[];
+  excluded?: string | string[];
+};
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,7 +62,7 @@ function shiftMonth(month: string, delta: number): string {
 export default async function SpendingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string | string[] }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const env = validateEnv();
   const frame = (children: React.ReactNode) => (
@@ -66,19 +86,25 @@ export default async function SpendingPage({
     redirect("/signin");
   }
 
-  const { month: rawMonth } = await searchParams;
-  const resolved = resolveMonthParam(rawMonth, new Date(), session.timeZone);
+  const params = await searchParams;
+  const resolved = resolveMonthParam(
+    params.month,
+    new Date(),
+    session.timeZone,
+  );
+  const parsedFilters = parseTransactionFilters(params);
 
-  const [spending, connections, accounts] = await Promise.all([
+  const [spending, connections, accounts, options] = await Promise.all([
     getMonthlySpending(databaseUrl, {
       ownerId: session.ownerId,
       month: resolved.month,
     }),
     listOwnerConnections(databaseUrl, { ownerId: session.ownerId }),
     listOwnerAccounts(databaseUrl, { ownerId: session.ownerId }),
+    listTransactionFilterOptions(databaseUrl, { ownerId: session.ownerId }),
   ]);
 
-  if (!spending.ok || !connections.ok || !accounts.ok) {
+  if (!spending.ok || !connections.ok || !accounts.ok || !options.ok) {
     return frame(
       <ErrorState
         title="Spending could not load"
@@ -123,18 +149,80 @@ export default async function SpendingPage({
   const institutionById = new Map(
     conn.map((entry) => [entry.connectionId, entry.institutionName]),
   );
-  const exclusionCount =
-    data.exclusions.foreignCurrency +
-    data.exclusions.unclassifiedInflow +
-    data.exclusions.transfer +
-    data.exclusions.cardPayment +
-    data.exclusions.removed +
-    data.exclusions.superseded;
+  const exclusionCount = Object.values(data.exclusions).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
   const pendingOutflow = BigInt(data.pendingOutflowUnits);
   const pendingRefund = BigInt(data.pendingRefundUnits);
   const categories = [...data.categories]
-    .filter((category) => category.spentUnits !== "0")
+    .filter(
+      (category) => category.spentUnits !== "0" || category.postedCount > 0,
+    )
     .sort((a, b) => (BigInt(b.spentUnits) > BigInt(a.spentUnits) ? 1 : -1));
+  const categoryParam = (category: {
+    categoryId: string;
+    stableKey: string;
+  }) =>
+    category.stableKey === UNCATEGORIZED_STABLE_KEY
+      ? UNCATEGORIZED_PARAM
+      : category.categoryId;
+
+  // Unknown category or account ids drop that filter with a notice, the
+  // same way an invalid month does.
+  const { filters } = parsedFilters;
+  let filterNormalized = parsedFilters.normalized;
+  const categoryById = new Map(
+    options.value.categories.map((category) => [category.id, category]),
+  );
+  if (filters.category !== null && filters.category !== UNCATEGORIZED_PARAM) {
+    const match = categoryById.get(filters.category);
+    if (match === undefined) {
+      filters.category = null;
+      filterNormalized = true;
+    } else if (match.stableKey === UNCATEGORIZED_STABLE_KEY) {
+      filters.category = UNCATEGORIZED_PARAM;
+    }
+  }
+  if (
+    filters.account !== null &&
+    !options.value.accounts.some((account) => account.id === filters.account)
+  ) {
+    filters.account = null;
+    filterNormalized = true;
+  }
+
+  const firstPage = await listMonthTransactions(databaseUrl, {
+    ownerId: session.ownerId,
+    month: data.month,
+    ...(filters.category !== null ? { categoryId: filters.category } : {}),
+    ...(filters.account !== null ? { accountId: filters.account } : {}),
+    ...(filters.q !== null ? { query: filters.q } : {}),
+    showExcluded: filters.showExcluded,
+  });
+
+  const activeCategories = options.value.categories.filter(
+    (category) => !category.archived,
+  );
+  const filterCategories = [
+    { value: UNCATEGORIZED_PARAM, label: "Uncategorized" },
+    ...options.value.categories
+      .filter(
+        (category) =>
+          category.stableKey !== UNCATEGORIZED_STABLE_KEY &&
+          (!category.archived || category.id === filters.category),
+      )
+      .map((category) => ({
+        value: category.id,
+        label: category.archived
+          ? `${category.label} (archived)`
+          : category.label,
+      })),
+  ];
+  const filterAccounts = options.value.accounts.map((account) => ({
+    id: account.id,
+    label: `${account.name}${account.subtype !== null ? ` · ${account.subtype}` : ""}${account.archived ? " (archived)" : ""}`,
+  }));
 
   return frame(
     <>
@@ -154,7 +242,7 @@ export default async function SpendingPage({
         <nav aria-label="Month" className="flex items-center gap-1">
           <Button variant="outline" size="icon-sm" asChild>
             <Link
-              href={`/spending?month=${shiftMonth(data.month, -1)}`}
+              href={spendingHref(shiftMonth(data.month, -1), filters)}
               aria-label="Previous month"
             >
               <ChevronLeftIcon aria-hidden="true" />
@@ -162,7 +250,7 @@ export default async function SpendingPage({
           </Button>
           <Button variant="outline" size="icon-sm" asChild>
             <Link
-              href={`/spending?month=${shiftMonth(data.month, 1)}`}
+              href={spendingHref(shiftMonth(data.month, 1), filters)}
               aria-label="Next month"
             >
               <ChevronRightIcon aria-hidden="true" />
@@ -174,6 +262,12 @@ export default async function SpendingPage({
       {resolved.normalized ? (
         <p role="alert" className="text-sm text-destructive">
           That month was not valid, so the current month is shown.
+        </p>
+      ) : null}
+
+      {filterNormalized ? (
+        <p role="alert" className="text-sm text-destructive">
+          A category or account filter was not found, so it was removed.
         </p>
       ) : null}
 
@@ -249,27 +343,56 @@ export default async function SpendingPage({
             </p>
           ) : (
             <ul className="mt-2 divide-y">
-              {categories.map((category) => (
-                <li
-                  key={category.categoryId}
-                  className="flex h-9 items-center justify-between gap-4 text-sm"
-                >
-                  <span>{category.label}</span>
-                  <Money
-                    units={BigInt(category.spentUnits)}
-                    currency="USD"
-                    context="spending"
-                  />
-                </li>
-              ))}
+              {categories.map((category) => {
+                const value = categoryParam(category);
+                const active = filters.category === value;
+                return (
+                  <li key={category.categoryId}>
+                    <Link
+                      href={spendingHref(data.month, { category: value })}
+                      scroll={false}
+                      aria-current={active ? "true" : undefined}
+                      className={cn(
+                        "-mx-2 flex h-9 items-center justify-between gap-4 rounded-md px-2 text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50",
+                        active && "bg-muted font-medium",
+                      )}
+                    >
+                      <span>
+                        {category.label}
+                        <span className="sr-only">, show its transactions</span>
+                      </span>
+                      <span className="flex items-baseline gap-3">
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {category.postedCount} posted
+                        </span>
+                        <Money
+                          units={BigInt(category.spentUnits)}
+                          currency="USD"
+                          context="spending"
+                        />
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
           {exclusionCount > 0 ? (
             <p className="mt-3 text-xs text-muted-foreground">
               {exclusionCount} transaction
               {exclusionCount === 1 ? "" : "s"} not counted: transfers, card
-              payments, refunds or inflows outside spending, other currencies,
-              or removed records.
+              payments, income, unclassified inflows or outflows, other
+              currencies, or removed and replaced records.{" "}
+              <Link
+                href={spendingHref(data.month, {
+                  ...filters,
+                  showExcluded: true,
+                })}
+                scroll={false}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                Show them
+              </Link>
             </p>
           ) : null}
         </section>
@@ -326,6 +449,26 @@ export default async function SpendingPage({
           )}
         </section>
       </div>
+
+      {firstPage.ok ? (
+        <TransactionsPanel
+          month={data.month}
+          filters={filters}
+          initial={firstPage.value}
+          filterCategories={filterCategories}
+          pickerCategories={activeCategories.map((category) => ({
+            id: category.id,
+            label: category.label,
+          }))}
+          accounts={filterAccounts}
+        />
+      ) : (
+        <ErrorState
+          title="Transactions could not load"
+          message="Something went wrong while reading this month's transactions."
+          retryLabel="Try again"
+        />
+      )}
     </>,
   );
 }

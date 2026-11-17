@@ -31,7 +31,7 @@ Preferred stack is an owner proposal, not a scope decision: Next.js App Router, 
 | 4   | Design system and app shell        | Foundation | done        |
 | 5   | Owner to first spending view       | Slice 1    | done        |
 | 6   | Reliable sync and account overview | Slice 2    | done        |
-| 7   | Spending investigation             | Slice 3    | planned     |
+| 7   | Spending investigation             | Slice 3    | done        |
 | 8   | Monthly category budgets           | Slice 4    | planned     |
 | 9   | Recurring charge suggestions       | Slice 5    | planned     |
 | 10  | Read only finance chat             | Slice 6    | planned     |
@@ -154,13 +154,23 @@ Deepen the existing connection path with reliable updates, sync health, balances
 
 ## Slice 3: Explain a month
 
-### 7. Spending investigation · planned · needs a decision
+### 7. Spending investigation · done
 
 Expand the stored spending view into a useful transaction table and monthly category breakdown. Make every summary explainable through the underlying transactions.
 
 **Done when:** the owner can filter transactions, edit categories, and inspect monthly category totals; edits survive sync; totals reconcile with the stated spending rules; filters and exclusions are visible; large histories remain usable.
 
-- [ ] Design it (spec): `/architect spending investigation`
+**Spec:** [0007](../specs/0007-spending-investigation/index.md), content confirmed after cross check resolutions.
+
+- [x] Design it (spec): `/architect spending investigation`
+- [x] Build it: `/develop spending investigation` — code in `src/features/finance/` (`transaction-service.ts`, `transaction-params.ts`, `month-query.ts`, `spending-service.ts`, `override-service.ts`), `src/app/(app)/spending/` (`page.tsx`, `actions.ts`, `transactions-panel.tsx`, `transaction-editor.tsx`), `src/components/ui/` (table, popover, command), `db/migrations/0004_panoramic_bucky.sql`, `test/foundation.transactions*.test.ts`
+  1. Thin thread: pending index migration, transaction service with keyset paging and single row read, minimal table under the summary (AC-1, AC-2).
+  2. Filters and reconciliation: URL params with normalization, filter controls, excluded toggle with badges, new exclusion buckets, count and sum header (AC-2, AC-3, AC-4).
+  3. Breakdown posted counts and drill down into the table (AC-5).
+  4. Editing: update action, removed row guard, inline popover, conflict refetch, post edit revalidation (AC-6, AC-7).
+  5. States, accessibility, performance check, and tests (AC-8, AC-9, AC-10).
+- [x] Verify it: `/check verify spending investigation`
+- [x] Test it: `/test spending investigation`
 
 ## Slice 4: Stay within a plan
 

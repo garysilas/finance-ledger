@@ -321,6 +321,9 @@ export const transaction = ledger.table(
       table.accountId,
       table.providerDate,
     ),
+    index("transaction_owner_pending_provider_date_idx")
+      .on(table.ownerId, table.providerDate)
+      .where(sql`${table.postingState} = 'pending'`),
     check(
       "transaction_posting_state",
       sql`${table.postingState} IN ('pending', 'posted')`,

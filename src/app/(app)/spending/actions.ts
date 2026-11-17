@@ -1,14 +1,31 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { CLASSIFICATIONS } from "@/features/finance/classification";
 import {
   createConnection,
   findConnectionByProviderItem,
 } from "@/features/finance/connection-service";
 import type { FailureCode } from "@/features/finance/errors";
+import {
+  setTransactionOverrides,
+  type SetOverridesResult,
+} from "@/features/finance/override-service";
 import { uuid } from "@/features/finance/service";
+import {
+  CURSOR_PATTERN,
+  SEARCH_MAX_LENGTH,
+  UNCATEGORIZED_PARAM,
+  type TransactionPage,
+  type TransactionRow,
+} from "@/features/finance/transaction-params";
+import {
+  getTransaction,
+  listMonthTransactions,
+} from "@/features/finance/transaction-service";
 import { validateEnv } from "@/server/env";
 import {
   drainConnectionSync,
@@ -167,4 +184,100 @@ export async function retryInitialSyncAction(
     return { ok: false, code: sync.code };
   }
   return { ok: true };
+}
+
+const pageSchema = z
+  .object({
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+    categoryId: z.union([uuid, z.literal(UNCATEGORIZED_PARAM)]).optional(),
+    accountId: uuid.optional(),
+    query: z.string().max(SEARCH_MAX_LENGTH).optional(),
+    showExcluded: z.boolean(),
+    cursor: z.string().regex(CURSOR_PATTERN).optional(),
+  })
+  .strict();
+
+export type PageResult =
+  { ok: true; page: TransactionPage } | { ok: false; code: ActionCode };
+
+// Load more for the transaction table. The owner always comes from the
+// session, never from the caller.
+export async function fetchTransactionPage(
+  rawInput: unknown,
+): Promise<PageResult> {
+  const context = await sessionContext();
+  if (typeof context === "string") {
+    return { ok: false, code: context };
+  }
+  const parsed = pageSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { ok: false, code: "INVALID_INPUT" };
+  }
+  const result = await listMonthTransactions(context.databaseUrl, {
+    ownerId: context.ownerId,
+    ...parsed.data,
+  });
+  if (!result.ok) {
+    return { ok: false, code: result.code };
+  }
+  return { ok: true, page: result.value };
+}
+
+const updateSchema = z
+  .object({
+    transactionId: uuid,
+    expectedOwnerEditRevision: z.string().regex(/^\d{1,19}$/),
+    categoryId: uuid.nullable().optional(),
+    classification: z.enum(CLASSIFICATIONS).nullable().optional(),
+    requestId: uuid,
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.categoryId !== undefined || value.classification !== undefined,
+  );
+
+export type UpdateResult =
+  // A replayed request id acknowledges the original edit without its
+  // values (value absent); the revalidated page carries the current ones.
+  | { ok: true; value?: SetOverridesResult }
+  | { ok: false; code: ActionCode; row?: TransactionRow };
+
+// Edits one live row's category or classification through the override
+// service (revision checked, receipt and audit written). A conflict
+// returns the row's current values, or its posted replacement's, so the
+// owner can retry on fresh data. Success and conflict both revalidate the
+// page, so loaded pages and every total refresh together.
+export async function updateTransaction(
+  rawInput: unknown,
+): Promise<UpdateResult> {
+  const context = await sessionContext();
+  if (typeof context === "string") {
+    return { ok: false, code: context };
+  }
+  const parsed = updateSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { ok: false, code: "INVALID_INPUT" };
+  }
+  const result = await setTransactionOverrides(context.databaseUrl, {
+    ownerId: context.ownerId,
+    ...parsed.data,
+  });
+  if (result.ok) {
+    revalidatePath("/spending");
+    return { ok: true, value: result.value.value };
+  }
+  if (result.code !== "CONFLICT") {
+    return { ok: false, code: result.code };
+  }
+  revalidatePath("/spending");
+  const fresh = await getTransaction(context.databaseUrl, {
+    ownerId: context.ownerId,
+    transactionId: result.successorId ?? parsed.data.transactionId,
+  });
+  return {
+    ok: false,
+    code: "CONFLICT",
+    row: fresh.ok ? fresh.value : undefined,
+  };
 }
