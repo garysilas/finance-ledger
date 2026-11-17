@@ -29,11 +29,25 @@ vi.mock("@/features/finance/service", async () => {
   const { z } = await import("zod");
   return { uuid: z.string().uuid() };
 });
+const listMonthTransactions = vi.hoisted(() => vi.fn());
+const getTransaction = vi.hoisted(() => vi.fn());
+const setTransactionOverrides = vi.hoisted(() => vi.fn());
+const revalidatePath = vi.hoisted(() => vi.fn());
+vi.mock("@/features/finance/transaction-service", () => ({
+  listMonthTransactions,
+  getTransaction,
+}));
+vi.mock("@/features/finance/override-service", () => ({
+  setTransactionOverrides,
+}));
+vi.mock("next/cache", () => ({ revalidatePath }));
 
 import {
   completeConnectionAction,
   createLinkTokenAction,
+  fetchTransactionPage,
   retryInitialSyncAction,
+  updateTransaction,
 } from "./actions";
 
 const DB_URL = "postgresql://app@127.0.0.1:5432/ledger";
@@ -60,6 +74,10 @@ beforeEach(() => {
   drainConnectionSync.mockReset();
   createConnectionMock.mockReset();
   findConnectionByProviderItem.mockReset();
+  listMonthTransactions.mockReset();
+  getTransaction.mockReset();
+  setTransactionOverrides.mockReset();
+  revalidatePath.mockReset();
 });
 
 // covers: AC-2 every action revalidates the session itself; AC-3 the
@@ -70,6 +88,20 @@ describe("session enforcement", () => {
     ["createLinkTokenAction", () => createLinkTokenAction()],
     ["completeConnectionAction", () => completeConnectionAction("tok")],
     ["retryInitialSyncAction", () => retryInitialSyncAction(CONNECTION_ID)],
+    [
+      "fetchTransactionPage",
+      () => fetchTransactionPage({ month: "2031-01", showExcluded: false }),
+    ],
+    [
+      "updateTransaction",
+      () =>
+        updateTransaction({
+          transactionId: CONNECTION_ID,
+          expectedOwnerEditRevision: "0",
+          classification: "transfer",
+          requestId: CONNECTION_ID,
+        }),
+    ],
   ])(
     "%s fails with SESSION when there is no live session",
     async (_n, call) => {
@@ -257,5 +289,138 @@ describe("retryInitialSyncAction", () => {
     drainConnectionSync.mockResolvedValue(fail("NOT_FOUND"));
     const result = await retryInitialSyncAction(CONNECTION_ID);
     expect(result).toEqual({ ok: false, code: "NOT_FOUND" });
+  });
+});
+
+// covers spec 0007: AC-1 load more paging; AC-6 edits through the
+// override service; AC-7 conflict refetch and revalidation; AC-10 session
+// owner only, strict input, fixed codes.
+describe("fetchTransactionPage", () => {
+  const PAGE = {
+    rows: [],
+    nextCursor: null,
+    matchCount: 0,
+    filteredPostedUnits: "0",
+  };
+
+  it("reads with the session owner, never a caller supplied one", async () => {
+    listMonthTransactions.mockResolvedValue({ ok: true, value: PAGE });
+    const input = {
+      month: "2031-01",
+      categoryId: "uncategorized",
+      query: "cafe",
+      showExcluded: true,
+      cursor: `2031-01-05_${CONNECTION_ID}`,
+    };
+    expect(await fetchTransactionPage(input)).toEqual({ ok: true, page: PAGE });
+    expect(listMonthTransactions).toHaveBeenCalledWith(DB_URL, {
+      ownerId: SESSION.ownerId,
+      ...input,
+    });
+  });
+
+  it.each([
+    ["an owner id", { ownerId: SESSION.ownerId }],
+    ["a malformed cursor", { cursor: "page-2" }],
+    ["an over long search", { query: "x".repeat(121) }],
+    ["a bad category", { categoryId: "dining" }],
+  ])("rejects %s with INVALID_INPUT", async (_name, extra) => {
+    const result = await fetchTransactionPage({
+      month: "2031-01",
+      showExcluded: false,
+      ...extra,
+    });
+    expect(result).toEqual({ ok: false, code: "INVALID_INPUT" });
+    expect(listMonthTransactions).not.toHaveBeenCalled();
+  });
+
+  it("passes through a fixed failure code", async () => {
+    listMonthTransactions.mockResolvedValue(fail("DB_TIMEOUT"));
+    expect(
+      await fetchTransactionPage({ month: "2031-01", showExcluded: false }),
+    ).toEqual({ ok: false, code: "DB_TIMEOUT" });
+  });
+});
+
+describe("updateTransaction", () => {
+  const TXN_ID = "33333333-3333-4333-8333-333333333333";
+  const REQUEST_ID = "44444444-4444-4444-8444-444444444444";
+  const edit = (extra: Record<string, unknown> = {}) => ({
+    transactionId: TXN_ID,
+    expectedOwnerEditRevision: "2",
+    categoryId: null,
+    requestId: REQUEST_ID,
+    ...extra,
+  });
+
+  it("edits through the override service and revalidates the page", async () => {
+    const value = {
+      effectiveCategoryId: null,
+      effectiveClassification: "spending",
+      ownerEditRevision: "3",
+    };
+    setTransactionOverrides.mockResolvedValue({ ok: true, value: { value } });
+    expect(await updateTransaction(edit())).toEqual({ ok: true, value });
+    expect(setTransactionOverrides).toHaveBeenCalledWith(DB_URL, {
+      ownerId: SESSION.ownerId,
+      ...edit(),
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/spending");
+  });
+
+  it.each([
+    ["no field to change", { categoryId: undefined }],
+    ["an unknown classification", { classification: "gift" }],
+    ["a non numeric revision", { expectedOwnerEditRevision: "abc" }],
+    ["an owner id", { ownerId: SESSION.ownerId }],
+  ])("rejects %s with INVALID_INPUT", async (_name, extra) => {
+    expect(await updateTransaction(edit(extra))).toEqual({
+      ok: false,
+      code: "INVALID_INPUT",
+    });
+    expect(setTransactionOverrides).not.toHaveBeenCalled();
+  });
+
+  it("returns the refetched row on a stale revision conflict", async () => {
+    const row = { id: TXN_ID, ownerEditRevision: "5", editable: true };
+    setTransactionOverrides.mockResolvedValue(fail("CONFLICT"));
+    getTransaction.mockResolvedValue({ ok: true, value: row });
+    expect(await updateTransaction(edit())).toEqual({
+      ok: false,
+      code: "CONFLICT",
+      row,
+    });
+    expect(getTransaction).toHaveBeenCalledWith(DB_URL, {
+      ownerId: SESSION.ownerId,
+      transactionId: TXN_ID,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/spending");
+  });
+
+  it("refetches the posted replacement when the pending row was superseded", async () => {
+    setTransactionOverrides.mockResolvedValue({
+      ...fail("CONFLICT"),
+      successorId: CONNECTION_ID,
+    });
+    getTransaction.mockResolvedValue(fail("NOT_FOUND"));
+    expect(await updateTransaction(edit())).toEqual({
+      ok: false,
+      code: "CONFLICT",
+      row: undefined,
+    });
+    expect(getTransaction).toHaveBeenCalledWith(DB_URL, {
+      ownerId: SESSION.ownerId,
+      transactionId: CONNECTION_ID,
+    });
+  });
+
+  it("passes through other failures without refetching", async () => {
+    setTransactionOverrides.mockResolvedValue(fail("NOT_FOUND"));
+    expect(await updateTransaction(edit())).toEqual({
+      ok: false,
+      code: "NOT_FOUND",
+    });
+    expect(getTransaction).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

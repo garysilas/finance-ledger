@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",
+    "cmdk": "1.1.1",
     "cn": "0.5.2",
     "drizzle-orm": "0.45.4",
     "geist": "1.9.2",

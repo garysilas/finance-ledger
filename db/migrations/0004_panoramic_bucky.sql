@@ -1,0 +1,1 @@
+CREATE INDEX "transaction_owner_pending_provider_date_idx" ON "ledger"."transaction" USING btree ("owner_id","provider_date") WHERE "ledger"."transaction"."posting_state" = 'pending';

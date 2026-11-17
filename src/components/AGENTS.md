@@ -20,6 +20,7 @@ Shared presentation for Ledger: shadcn/ui primitives on Radix, the app shell (si
 | `states/`                                             | `LoadingState`, `EmptyState`, `ErrorState`, `StaleNotice`                                    |
 | `status-labels.ts`                                    | Fixed database status labels and messages, safe for client and server                        |
 | `retry-button.tsx`                                    | Retry control with a polite live region; `router.refresh()` by default                       |
+| `preview-frame.tsx`                                    | Popup container resolution for portaled shadcn.io popups (`usePopupContainer`), preview portal contexts |
 
 ## Conventions
 

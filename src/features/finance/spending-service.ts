@@ -3,14 +3,13 @@ import "server-only";
 import { z } from "zod";
 
 import { UNCATEGORIZED_STABLE_KEY } from "./classification";
-import {
-  monthEnd,
-  monthOfInstant,
-  monthStart,
-  nextMonthStart,
-  parseMonth,
-} from "./dates";
+import { monthOfInstant, monthStart, parseMonth } from "./dates";
 import { failure, type ServiceResult } from "./errors";
+import {
+  COUNTING_SQL,
+  EXCLUSION_REASON_SQL,
+  monthCandidate,
+} from "./month-query";
 import { uuid } from "./service";
 import { runUnitOfWork, OpFailure } from "@/server/db/finance";
 
@@ -31,6 +30,7 @@ export type MonthlyCategory = {
   stableKey: string;
   label: string;
   spentUnits: string;
+  postedCount: number;
   budget: {
     limitUnits: string;
     remainingUnits: string;
@@ -45,9 +45,13 @@ export type MonthlySpendingResult = {
   pendingOutflowUnits: string;
   pendingRefundUnits: string;
   categories: MonthlyCategory[];
+  // Each excluded row counts in exactly one bucket, by the same
+  // precedence as the transaction table's exclusion badge.
   exclusions: {
     foreignCurrency: number;
     unclassifiedInflow: number;
+    unclassifiedOutflow: number;
+    income: number;
     transfer: number;
     cardPayment: number;
     removed: number;
@@ -92,18 +96,11 @@ export async function getMonthlySpending(
 
     const monthValue = input.month ?? monthOfInstant(clock(), timeZone);
     const bounds = parseMonth(monthValue);
-    if (!bounds) {
+    const candidate = monthCandidate(monthValue);
+    if (!bounds || !candidate) {
       throw new OpFailure("INVALID_INPUT");
     }
-    const start = monthStart(bounds.year, bounds.month);
-    const next = nextMonthStart(bounds.year, bounds.month);
-    const end = monthEnd(bounds.year, bounds.month);
-    const monthDate = start;
-
-    const candidate = monthCandidatePredicate(next === null, [
-      start,
-      next ?? end,
-    ]);
+    const monthDate = monthStart(bounds.year, bounds.month);
 
     const uncat = await db.query<{ id: string }>(
       `SELECT id FROM ledger.category
@@ -117,20 +114,17 @@ export async function getMonthlySpending(
       label: string;
       stable_key: string;
       total: string;
+      posted_count: string;
     }>(
       `SELECT COALESCE(t.owner_category_id, t.provider_category_id, $4) AS category_id,
               c.label, c.stable_key,
-              SUM(t.amount_units::numeric) AS total
+              SUM(t.amount_units::numeric) AS total,
+              COUNT(*) AS posted_count
        FROM ledger."transaction" t
        LEFT JOIN ledger.category c
          ON c.id = COALESCE(t.owner_category_id, t.provider_category_id, $4)
        WHERE t.owner_id = $1
-         AND t.posting_state = 'posted'
-         AND t.removed_at IS NULL
-         AND t.superseded_by_id IS NULL
-         AND t.currency_code = 'USD'
-         AND COALESCE(t.owner_classification, t.provider_classification)
-             IN ('spending', 'refund')
+         AND ${COUNTING_SQL}
          AND ${candidate.posted}
        GROUP BY 1, 2, 3`,
       [input.ownerId, candidate.lower, candidate.upper, uncategorizedId],
@@ -144,44 +138,19 @@ export async function getMonthlySpending(
               SUM(t.amount_units::numeric) AS total
        FROM ledger."transaction" t
        WHERE t.owner_id = $1
-         AND t.posting_state = 'pending'
-         AND t.removed_at IS NULL
-         AND t.superseded_by_id IS NULL
-         AND t.currency_code = 'USD'
-         AND COALESCE(t.owner_classification, t.provider_classification)
-             IN ('spending', 'refund')
+         AND ${COUNTING_SQL}
          AND ${candidate.pending}
        GROUP BY 1`,
       [input.ownerId, candidate.lower, candidate.upper],
     );
 
-    const exclusionRows = await db.query<{
-      foreign_currency: string;
-      unclassified_inflow: string;
-      transfer: string;
-      card_payment: string;
-      removed: string;
-      superseded: string;
-    }>(
-      `SELECT
-         COUNT(*) FILTER (WHERE t.currency_code <> 'USD') AS foreign_currency,
-         COUNT(*) FILTER (
-           WHERE COALESCE(t.owner_classification, t.provider_classification)
-                 = 'unclassified' AND t.amount_units < 0
-         ) AS unclassified_inflow,
-         COUNT(*) FILTER (
-           WHERE COALESCE(t.owner_classification, t.provider_classification)
-                 = 'transfer'
-         ) AS transfer,
-         COUNT(*) FILTER (
-           WHERE COALESCE(t.owner_classification, t.provider_classification)
-                 = 'card_payment'
-         ) AS card_payment,
-         COUNT(*) FILTER (WHERE t.removed_at IS NOT NULL) AS removed,
-         COUNT(*) FILTER (WHERE t.superseded_by_id IS NOT NULL) AS superseded
+    const exclusionRows = await db.query<{ reason: string; n: string }>(
+      `SELECT ${EXCLUSION_REASON_SQL} AS reason, COUNT(*) AS n
        FROM ledger."transaction" t
        WHERE t.owner_id = $1
-         AND (${candidate.posted} OR ${candidate.pending})`,
+         AND ${candidate.either}
+         AND NOT ${COUNTING_SQL}
+       GROUP BY 1`,
       [input.ownerId, candidate.lower, candidate.upper],
     );
 
@@ -234,6 +203,7 @@ export async function getMonthlySpending(
         stableKey: row.stable_key,
         label: row.label,
         spentUnits: total.toString(),
+        postedCount: Number(row.posted_count),
         budget: null,
       });
     }
@@ -249,6 +219,7 @@ export async function getMonthlySpending(
         stableKey: row.stable_key,
         label: row.label,
         spentUnits: spent.toString(),
+        postedCount: existing?.postedCount ?? 0,
         budget: {
           limitUnits: limit.toString(),
           remainingUnits: remaining.toString(),
@@ -267,7 +238,9 @@ export async function getMonthlySpending(
       }
     }
 
-    const exclusions = exclusionRows.rows[0];
+    const exclusions = new Map(
+      exclusionRows.rows.map((row) => [row.reason, Number(row.n)]),
+    );
     const coverage = coverageRows.rows[0];
 
     return {
@@ -280,12 +253,14 @@ export async function getMonthlySpending(
         a.stableKey.localeCompare(b.stableKey),
       ),
       exclusions: {
-        foreignCurrency: Number(exclusions.foreign_currency),
-        unclassifiedInflow: Number(exclusions.unclassified_inflow),
-        transfer: Number(exclusions.transfer),
-        cardPayment: Number(exclusions.card_payment),
-        removed: Number(exclusions.removed),
-        superseded: Number(exclusions.superseded),
+        foreignCurrency: exclusions.get("foreign_currency") ?? 0,
+        unclassifiedInflow: exclusions.get("unclassified_inflow") ?? 0,
+        unclassifiedOutflow: exclusions.get("unclassified_outflow") ?? 0,
+        income: exclusions.get("income") ?? 0,
+        transfer: exclusions.get("transfer") ?? 0,
+        cardPayment: exclusions.get("card_payment") ?? 0,
+        removed: exclusions.get("removed") ?? 0,
+        superseded: exclusions.get("superseded") ?? 0,
       },
       coverage: {
         missingBalances: Number(coverage.missing),
@@ -306,21 +281,4 @@ export async function getMonthlySpending(
       },
     };
   });
-}
-
-// Monthly candidate predicate: posted rows join by posted_date, pending
-// rows by provider_date. The final month of year 9999 uses an inclusive
-// end date rather than an out-of-range next month.
-function monthCandidatePredicate(
-  inclusiveEnd: boolean,
-  bounds: [string, string],
-): { posted: string; pending: string; lower: string; upper: string } {
-  const [lower, upper] = bounds;
-  const posted = inclusiveEnd
-    ? `(t.posting_state = 'posted' AND t.posted_date >= $2 AND t.posted_date <= $3)`
-    : `(t.posting_state = 'posted' AND t.posted_date >= $2 AND t.posted_date < $3)`;
-  const pending = inclusiveEnd
-    ? `(t.posting_state = 'pending' AND t.provider_date >= $2 AND t.provider_date <= $3)`
-    : `(t.posting_state = 'pending' AND t.provider_date >= $2 AND t.provider_date < $3)`;
-  return { posted, pending, lower, upper };
 }

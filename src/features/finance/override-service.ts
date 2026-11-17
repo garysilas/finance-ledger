@@ -61,6 +61,7 @@ export async function setTransactionOverrides(
       const rows = await db.query<{
         id: string;
         amount_units: string;
+        removed_at: Date | null;
         superseded_by_id: string | null;
         provider_category_id: string | null;
         provider_classification: string | null;
@@ -73,7 +74,8 @@ export async function setTransactionOverrides(
         category_inherited_from_id: string | null;
         classification_inherited_from_id: string | null;
       }>(
-        `SELECT id, amount_units, superseded_by_id, provider_category_id,
+        `SELECT id, amount_units, removed_at, superseded_by_id,
+                provider_category_id,
                 provider_classification, owner_category_id,
                 owner_classification, category_intent,
                 classification_intent, owner_edit_revision, revision,
@@ -88,6 +90,10 @@ export async function setTransactionOverrides(
       const record = rows.rows[0];
       if (record.superseded_by_id !== null) {
         throw new OpFailure("CONFLICT", record.superseded_by_id);
+      }
+      // Removed rows are display only history; edits never revive them.
+      if (record.removed_at !== null) {
+        throw new OpFailure("CONFLICT");
       }
       if (BigInt(record.owner_edit_revision) !== expectedEditRevision) {
         throw new OpFailure("CONFLICT");
